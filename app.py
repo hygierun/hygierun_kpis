@@ -10,6 +10,11 @@ import tempfile
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
+import sys
+
+# Ajouter le répertoire du projet au path Python (nécessaire pour Streamlit Cloud)
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
 
 from src.weekly_loader import WeeklyDataLoader
 from src.kpi_calculator import KPICalculator
