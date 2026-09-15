@@ -63,13 +63,21 @@ class WeeklyDataLoader:
             print(f"\n📥 Chargement des feuilles essentielles:")
             for sheet in self.REQUIRED_SHEETS:
                 if sheet in self.available_sheets:
-                    df = pd.read_excel(self.file_path, sheet_name=sheet)
+                    # Gestion spéciale pour Expl_Loc_Delais qui a des colonnes vides au début
+                    if sheet == "Expl_Loc_Delais":
+                        df = pd.read_excel(self.file_path, sheet_name=sheet, usecols=range(8, None))
+                        # Renommer les colonnes si nécessaire
+                        if 'N°' not in df.columns and 'Unnamed: 8' in df.columns:
+                            # Les colonnes réelles commencent à la colonne 9 (index 8)
+                            df = df.iloc[:, 0:]  # Garder comme est, les colonnes correctes sont là
+                    else:
+                        df = pd.read_excel(self.file_path, sheet_name=sheet)
                     self.dfs[sheet] = df
                     print(f"   ✓ {sheet:30s} ({len(df):6d} lignes)")
                 else:
                     print(f"   ✗ {sheet:30s} (non trouvée)")
 
-            # Vérifier qu'au moins les feuilles critiques sont présentes
+            # Vérifier qu'au moins les feuilles critiques EXISTENT (peuvent être vides pour données passées)
             critical_sheets = [
                 "Commandes_ALivrer",
                 "Commandes_Arch",
@@ -81,10 +89,12 @@ class WeeklyDataLoader:
                 "Creances",
             ]
 
-            missing = [s for s in critical_sheets if s not in self.dfs]
+            missing = [s for s in critical_sheets if s not in self.available_sheets]
             if missing:
                 print(f"\n❌ Feuilles critiques manquantes: {missing}")
                 return False
+
+            print(f"\n✅ Feuilles critiques présentes (peuvent être vides pour données archivées)")
 
             print(f"\n✅ Données chargées avec succès")
             return True
