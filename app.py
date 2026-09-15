@@ -121,6 +121,12 @@ if generate_button:
                     calculator.set_period(start_date, end_date)
                     kpis = calculator.get_all_kpis()
 
+                    # Diagnostic du délai
+                    delai_value = kpis['livraisons']['delai']
+                    if delai_value == 0:
+                        st.warning(f"⚠️ Délai cde→livraison: Pas de données disponibles pour cette période")
+                        st.info(f"💡 Vérifiez que la feuille 'Expl_Loc_Delais' contient des données pour S{week_number:02d}")
+
                     # Afficher les KPIs calculés
                     with st.expander("📊 KPIs calculés", expanded=True):
                         kpi_cols = st.columns(4)
@@ -246,72 +252,6 @@ if generate_button:
                             for col in ['A', 'B', 'C', 'D', 'E', 'F']:
                                 ws_detail.column_dimensions[col].width = 15
 
-                        # LIVRAISONS - DÉLAIS
-                        df_delais = dfs.get("Expl_Loc_Delais", pd.DataFrame()).copy()
-                        if not df_delais.empty:
-                            for col in ['Date', 'Date Creation Cde', 'Liv. souhaitée']:
-                                if col in df_delais.columns:
-                                    df_delais[col] = pd.to_datetime(df_delais[col], errors='coerce')
-                            df_delais['Tournée'] = pd.to_numeric(df_delais['Tournée'], errors='coerce')
-                            df_delais['délai_livraison_souhaité'] = (
-                                df_delais['Liv. souhaitée'] - df_delais['Date Creation Cde']
-                            ).dt.days
-                            df_delais['delai_cde_2_livr'] = (
-                                (df_delais['Date'] - df_delais['Date Creation Cde']).dt.days -
-                                (df_delais['délai_livraison_souhaité'] - 1)
-                            )
-                            df_filtered = df_delais[
-                                (df_delais['Date'] >= start) & (df_delais['Date'] <= end) &
-                                (df_delais['délai_livraison_souhaité'] >= 0) &
-                                (df_delais['delai_cde_2_livr'] >= 0) & (df_delais['delai_cde_2_livr'] <= 14) &
-                                (df_delais['Tournée'] > 3000)
-                            ]
-                            ws_detail = wb.create_sheet(f'Semaine_{week_num:02d}_Livr_Delais')
-                            headers = ['N°', 'Date', 'Cde N°', 'Date Creation Cde', 'Liv. souhaitée', 'Délai souhaité', 'Délai Cde->Livr', 'Tournée']
-                            for col_idx, header in enumerate(headers, 1):
-                                cell = ws_detail.cell(row=1, column=col_idx)
-                                cell.value = header
-                                cell.font = Font(bold=True, color="FFFFFF")
-                                cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-                            for row_idx, (_, row) in enumerate(df_filtered.iterrows(), 2):
-                                ws_detail.cell(row=row_idx, column=1).value = row.get('N°')
-                                ws_detail.cell(row=row_idx, column=2).value = row.get('Date')
-                                ws_detail.cell(row=row_idx, column=3).value = row.get('Cde N°')
-                                ws_detail.cell(row=row_idx, column=4).value = row.get('Date Creation Cde')
-                                ws_detail.cell(row=row_idx, column=5).value = row.get('Liv. souhaitée')
-                                ws_detail.cell(row=row_idx, column=6).value = row.get('délai_livraison_souhaité')
-                                ws_detail.cell(row=row_idx, column=7).value = row.get('delai_cde_2_livr')
-                                ws_detail.cell(row=row_idx, column=8).value = row.get('Tournée')
-                            for col in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']:
-                                ws_detail.column_dimensions[col].width = 15
-
-                        # COMMANDES - EN ATTENTE
-                        df_attente = dfs.get("Commandes_ALivrer", pd.DataFrame()).copy()
-                        if not df_attente.empty:
-                            df_attente['Livraison'] = pd.to_datetime(df_attente['Livraison'], errors='coerce')
-                            date_min = datetime(2026, 1, 1)
-                            df_filtered = df_attente[
-                                (df_attente['Livraison'] >= date_min) & (df_attente['Livraison'] <= end) &
-                                (df_attente['Représentant'].isin(calculator.SALES_REPS_6))
-                            ]
-                            ws_detail = wb.create_sheet(f'Semaine_{week_num:02d}_Cdes_EnAttente')
-                            headers = ['N°', 'Date', 'Livraison', 'Représentant', 'Client', 'Total HT', 'Total TTC']
-                            for col_idx, header in enumerate(headers, 1):
-                                cell = ws_detail.cell(row=1, column=col_idx)
-                                cell.value = header
-                                cell.font = Font(bold=True, color="FFFFFF")
-                                cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-                            for row_idx, (_, row) in enumerate(df_filtered.iterrows(), 2):
-                                ws_detail.cell(row=row_idx, column=1).value = row.get('N°')
-                                ws_detail.cell(row=row_idx, column=2).value = row.get('Date')
-                                ws_detail.cell(row=row_idx, column=3).value = row.get('Livraison')
-                                ws_detail.cell(row=row_idx, column=4).value = row.get('Représentant')
-                                ws_detail.cell(row=row_idx, column=5).value = row.get('Client')
-                                ws_detail.cell(row=row_idx, column=6).value = row.get('Total HT')
-                                ws_detail.cell(row=row_idx, column=7).value = row.get('Total TTC')
-                            for col in ['A', 'B', 'C', 'D', 'E', 'F', 'G']:
-                                ws_detail.column_dimensions[col].width = 15
-
                         # CRÉANCES
                         df_creances = dfs.get("Creances", pd.DataFrame()).copy()
                         if not df_creances.empty:
@@ -403,7 +343,7 @@ if generate_button:
                     with st.expander("📋 Détails du traitement", expanded=False):
                         st.write(f"""
                         - ✅ Semaine {week_number:02d} remplie (ligne {row_to_fill})
-                        - ✅ 6 feuilles de détail créées
+                        - ✅ 4 feuilles de détail créées
                         - ✅ {len(loader.dfs)} feuilles sources chargées
                         """)
 
