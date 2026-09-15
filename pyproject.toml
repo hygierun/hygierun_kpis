@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hygierun-kpi-tool"
+version = "1.0.0"
+description = "Générateur de rapports KPI Hygierun"
+requires-python = ">=3.8"
+dependencies = [
+    "streamlit==1.63.0",
+    "pandas>=1.4.0",
+    "openpyxl>=3.1.0",
+]
+
+[tool.setuptools]
+packages = ["src"]

@@ -11,8 +11,7 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from src.weekly_loader import WeeklyDataLoader
-from src.kpi_calculator import KPICalculator
+from src import WeeklyDataLoader, KPICalculator
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill
 
@@ -155,8 +154,23 @@ if generate_button:
                             )
 
                     # Créer les feuilles de détail et remplir snapshot
+                    # IMPORTANT: Charger avec data_only=False pour garder les formules et les données
                     wb = load_workbook(str(snapshot_path))
                     ws = wb.active
+
+                    # Snapshot backup: Lire les données existantes AVANT modification
+                    existing_data = {}
+                    for row in ws.iter_rows(min_row=3, max_row=100, min_col=1, max_col=14):
+                        row_num = row[0].row
+                        if row[0].value and str(row[0].value).startswith('S'):
+                            existing_data[row_num] = [cell.value for cell in row]
+
+                    st.info(f"📌 Snapshot input chargé - {len(existing_data)} semaines existantes détectées")
+
+                    # Afficher les semaines détectées dans la sauvegarde
+                    if existing_data:
+                        detected_weeks = [row[0] for row in existing_data.values() if row[0]]
+                        st.info(f"📊 Semaines détectées: {', '.join(str(w) for w in detected_weeks[:10])}")
 
                     # Fonction pour créer feuilles de détail
                     def create_detail_sheets(wb, loader, calculator, week_num, start, end):
@@ -256,10 +270,19 @@ if generate_button:
                     # Créer feuilles et remplir snapshot
                     create_detail_sheets(wb, loader, calculator, week_number, start_date, end_date)
 
-                    # Calculer ligne pour écrire
+                    # Calculer ligne pour écrire (colonne A = numéro semaine, colonnes B-N = KPIs)
                     row_to_fill = week_number - 33 + 3
 
-                    # Remplir snapshot
+                    st.write(f"📝 Modification ligne {row_to_fill} pour semaine {week_number}")
+
+                    # Diagnostic: Vérifier quelle semaine est actuellement à cette ligne
+                    current_week_at_row = ws[f'A{row_to_fill}'].value
+                    st.info(f"📋 Ligne {row_to_fill} contient actuellement: {current_week_at_row}")
+
+                    # Remplir colonne A avec le numéro de semaine
+                    ws[f'A{row_to_fill}'].value = f'S{week_number:02d}'
+
+                    # Remplir snapshot - SEULEMENT la ligne demandée
                     col_mapping = {
                         'B': kpis['commandes']['nb_avec'],
                         'C': kpis['commandes']['ca_avec'] / 1000,
@@ -276,13 +299,36 @@ if generate_button:
                         'N': kpis['creances']['ca'] / 1000,
                     }
 
+                    # IMPORTANT: Ne modifier QUE la ligne demandée
                     for col, value in col_mapping.items():
                         cell = ws[f'{col}{row_to_fill}']
                         cell.value = value
                         if isinstance(value, float):
                             cell.number_format = '0.00' if col == 'K' else '0.0'
 
+                    st.success(f"✅ Ligne {row_to_fill} remplie - Autres semaines préservées")
+
                     wb.save(str(output_path))
+
+                    # VERIFICATION: Vérifier que les données ont bien été préservées
+                    wb_verify = load_workbook(str(output_path))
+                    ws_verify = wb_verify.active
+
+                    preserved_count = 0
+                    corrupted_rows = []
+                    for row_num, original_data in existing_data.items():
+                        if row_num != row_to_fill:  # Ne pas vérifier la ligne qu'on vient de modifier
+                            current_data = [ws_verify.cell(row=row_num, column=col).value for col in range(1, 15)]
+                            # Vérifier que au moins la colonne A (semaine) est intacte
+                            if current_data[0] == original_data[0]:
+                                preserved_count += 1
+                            else:
+                                corrupted_rows.append(row_num)
+
+                    if corrupted_rows:
+                        st.warning(f"⚠️ Attention: Lignes potentiellement corrompues détectées: {corrupted_rows}")
+                    else:
+                        st.success(f"✅ Vérification: {preserved_count} semaines intactes")
 
                     # Succès
                     st.success(f"✅ Rapport généré avec succès!")
