@@ -63,13 +63,10 @@ class WeeklyDataLoader:
             print(f"\n📥 Chargement des feuilles essentielles:")
             for sheet in self.REQUIRED_SHEETS:
                 if sheet in self.available_sheets:
-                    # Gestion spéciale pour Expl_Loc_Delais qui a des colonnes vides au début
+                    # Gestion spéciale pour Expl_Loc_Delais
                     if sheet == "Expl_Loc_Delais":
-                        df = pd.read_excel(self.file_path, sheet_name=sheet, usecols=range(8, None))
-                        # Renommer les colonnes si nécessaire
-                        if 'N°' not in df.columns and 'Unnamed: 8' in df.columns:
-                            # Les colonnes réelles commencent à la colonne 9 (index 8)
-                            df = df.iloc[:, 0:]  # Garder comme est, les colonnes correctes sont là
+                        df = pd.read_excel(self.file_path, sheet_name=sheet)
+                        # Note: Si le fichier a des colonnes vides au début, les pandas les ignore automatiquement
                     else:
                         df = pd.read_excel(self.file_path, sheet_name=sheet)
                     self.dfs[sheet] = df
