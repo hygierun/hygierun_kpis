@@ -236,7 +236,7 @@ if generate_button:
                             df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
                             df['Tournée'] = pd.to_numeric(df['Tournée'], errors='coerce')
                             df_filtered = df[(df['Date'] >= start) & (df['Date'] <= end) & (df['Tournée'] > 0) & ((df['Représentant'].isin(calculator.SALES_REPS_6)) | (df['Représentant'].isna()))]
-                            ws_detail = wb.create_sheet(f'Semaine_{week_number:02d}_Livraisons')
+                            ws_detail = wb.create_sheet(f'Semaine_{week_num:02d}_Livraisons')
                             headers = ['Date', 'Représentant', 'Tournée', 'Client', 'Total HT', 'Total TTC']
                             for col_idx, header in enumerate(headers, 1):
                                 cell = ws_detail.cell(row=1, column=col_idx)
@@ -258,7 +258,7 @@ if generate_button:
                         if not df_creances.empty:
                             df_creances['Nb JEch'] = pd.to_numeric(df_creances['Nb JEch'], errors='coerce')
                             df_filtered = df_creances[(df_creances['Nb JEch'] > 0) & (df_creances['Nb JEch'].notna())]
-                            ws_detail = wb.create_sheet(f'Semaine_{week_number:02d}_Créances')
+                            ws_detail = wb.create_sheet(f'Semaine_{week_num:02d}_Créances')
                             headers = ['Client', 'N° Facture', 'Montant', 'Nb JEch', 'Restant dû']
                             for col_idx, header in enumerate(headers, 1):
                                 cell = ws_detail.cell(row=1, column=col_idx)
@@ -279,7 +279,7 @@ if generate_button:
                     # Créer feuille "délais" - détails des délais calculés
                     df_delais = loader.dfs.get("Expl_Loc_Delais", pd.DataFrame()).copy()
                     if not df_delais.empty:
-                        ws_delais = wb.create_sheet(f'Semaine_{week_num:02d}_Delais')
+                        ws_delais = wb.create_sheet(f'Semaine_{week_number:02d}_Delais')
                         for r_idx, row in enumerate(dataframe_to_rows(df_delais, index=False, header=True), 1):
                             for c_idx, value in enumerate(row, 1):
                                 ws_delais.cell(row=r_idx, column=c_idx, value=value)
@@ -288,7 +288,7 @@ if generate_button:
                     # Créer feuille "EnAttente" - commandes en attente de livraison
                     df_en_attente = loader.dfs.get("Commandes_ALivrer", pd.DataFrame()).copy()
                     if not df_en_attente.empty:
-                        ws_en_attente = wb.create_sheet(f'Semaine_{week_num:02d}_EnAttente')
+                        ws_en_attente = wb.create_sheet(f'Semaine_{week_number:02d}_EnAttente')
                         for r_idx, row in enumerate(dataframe_to_rows(df_en_attente, index=False, header=True), 1):
                             for c_idx, value in enumerate(row, 1):
                                 ws_en_attente.cell(row=r_idx, column=c_idx, value=value)
