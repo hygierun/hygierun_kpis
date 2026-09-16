@@ -14,6 +14,7 @@ from pathlib import Path
 from src import WeeklyDataLoader, KPICalculator
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill
+from openpyxl.utils.dataframe import dataframe_to_rows
 
 # Configuration Streamlit
 st.set_page_config(
@@ -275,7 +276,23 @@ if generate_button:
 
                     # Créer feuilles et remplir snapshot
                     create_detail_sheets(wb, loader, calculator, week_number, start_date, end_date)
-
+                    # Créer feuille "délais" - détails des délais calculés
+                    df_delais = loader.dfs.get("Expl_Loc_Delais", pd.DataFrame()).copy()
+                    if not df_delais.empty:
+                        ws_delais = wb.create_sheet("délais")
+                        for r_idx, row in enumerate(dataframe_to_rows(df_delais, index=False, header=True), 1):
+                            for c_idx, value in enumerate(row, 1):
+                                ws_delais.cell(row=r_idx, column=c_idx, value=value)
+                        st.info(f"✅ Feuille 'délais': {len(df_delais)} lignes")
+                    
+                    # Créer feuille "EnAttente" - commandes en attente de livraison
+                    df_en_attente = loader.dfs.get("Commandes_ALivrer", pd.DataFrame()).copy()
+                    if not df_en_attente.empty:
+                        ws_en_attente = wb.create_sheet("EnAttente")
+                        for r_idx, row in enumerate(dataframe_to_rows(df_en_attente, index=False, header=True), 1):
+                            for c_idx, value in enumerate(row, 1):
+                                ws_en_attente.cell(row=r_idx, column=c_idx, value=value)
+                        st.info(f"✅ Feuille 'EnAttente': {len(df_en_attente)} lignes")
                     # Calculer ligne pour écrire (colonne A = numéro semaine, colonnes B-N = KPIs)
                     # Trouver la première ligne vide dans le snapshot
                     row_to_fill = None
