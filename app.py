@@ -303,7 +303,7 @@ if generate_button:
                     
                     if row_to_fill is None:
                         st.error("❌ Snapshot plein (toutes les lignes de 3 à 100 sont remplies)")
-                        return
+                        st.stop()
 
                     st.write(f"📝 Modification ligne {row_to_fill} pour semaine {week_number}")
 
