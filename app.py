@@ -277,7 +277,16 @@ if generate_button:
                     create_detail_sheets(wb, loader, calculator, week_number, start_date, end_date)
 
                     # Calculer ligne pour écrire (colonne A = numéro semaine, colonnes B-N = KPIs)
-                    row_to_fill = week_number - 33 + 3
+                    # Trouver la première ligne vide dans le snapshot
+                    row_to_fill = None
+                    for row in range(2, 201):
+                        if ws[f'A{row}'].value is None or str(ws[f'A{row}'].value).strip() == '':
+                            row_to_fill = row
+                            break
+                    
+                    if row_to_fill is None:
+                        st.error("❌ Snapshot plein (toutes les lignes de 3 à 100 sont remplies)")
+                        return
 
                     st.write(f"📝 Modification ligne {row_to_fill} pour semaine {week_number}")
 
