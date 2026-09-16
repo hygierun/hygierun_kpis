@@ -236,7 +236,7 @@ if generate_button:
                             df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
                             df['Tournée'] = pd.to_numeric(df['Tournée'], errors='coerce')
                             df_filtered = df[(df['Date'] >= start) & (df['Date'] <= end) & (df['Tournée'] > 0) & ((df['Représentant'].isin(calculator.SALES_REPS_6)) | (df['Représentant'].isna()))]
-                            ws_detail = wb.create_sheet(f'Semaine_{week_num:02d}_Livraisons')
+                            ws_detail = wb.create_sheet(f'Semaine_{week_number:02d}_Livraisons')
                             headers = ['Date', 'Représentant', 'Tournée', 'Client', 'Total HT', 'Total TTC']
                             for col_idx, header in enumerate(headers, 1):
                                 cell = ws_detail.cell(row=1, column=col_idx)
@@ -258,7 +258,7 @@ if generate_button:
                         if not df_creances.empty:
                             df_creances['Nb JEch'] = pd.to_numeric(df_creances['Nb JEch'], errors='coerce')
                             df_filtered = df_creances[(df_creances['Nb JEch'] > 0) & (df_creances['Nb JEch'].notna())]
-                            ws_detail = wb.create_sheet(f'Semaine_{week_num:02d}_Créances')
+                            ws_detail = wb.create_sheet(f'Semaine_{week_number:02d}_Créances')
                             headers = ['Client', 'N° Facture', 'Montant', 'Nb JEch', 'Restant dû']
                             for col_idx, header in enumerate(headers, 1):
                                 cell = ws_detail.cell(row=1, column=col_idx)
