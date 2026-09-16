@@ -296,7 +296,7 @@ if generate_button:
                     # Calculer ligne pour écrire (colonne A = numéro semaine, colonnes B-N = KPIs)
                     # Trouver la première ligne vide dans le snapshot
                     row_to_fill = None
-                    for row in range(2, 201):
+                    for row in range(3, 201):
                         if ws[f'A{row}'].value is None or str(ws[f'A{row}'].value).strip() == '':
                             row_to_fill = row
                             break
