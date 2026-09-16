@@ -279,7 +279,7 @@ if generate_button:
                     # Créer feuille "délais" - détails des délais calculés
                     df_delais = loader.dfs.get("Expl_Loc_Delais", pd.DataFrame()).copy()
                     if not df_delais.empty:
-                        ws_delais = wb.create_sheet("délais")
+                        ws_delais = wb.create_sheet(f'Semaine_{week_num:02d}_Delais')
                         for r_idx, row in enumerate(dataframe_to_rows(df_delais, index=False, header=True), 1):
                             for c_idx, value in enumerate(row, 1):
                                 ws_delais.cell(row=r_idx, column=c_idx, value=value)
@@ -288,7 +288,7 @@ if generate_button:
                     # Créer feuille "EnAttente" - commandes en attente de livraison
                     df_en_attente = loader.dfs.get("Commandes_ALivrer", pd.DataFrame()).copy()
                     if not df_en_attente.empty:
-                        ws_en_attente = wb.create_sheet("EnAttente")
+                        ws_en_attente = wb.create_sheet(f'Semaine_{week_num:02d}_EnAttente')
                         for r_idx, row in enumerate(dataframe_to_rows(df_en_attente, index=False, header=True), 1):
                             for c_idx, value in enumerate(row, 1):
                                 ws_en_attente.cell(row=r_idx, column=c_idx, value=value)
