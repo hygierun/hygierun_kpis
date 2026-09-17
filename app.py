@@ -205,6 +205,7 @@ if generate_button:
                                 cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
                             for row_idx, (_, row) in enumerate(df_filtered.iterrows(), 2):
                                 ws_detail.cell(row=row_idx, column=1).value = row.get('Date')
+                                ws_detail.cell(row=row_idx, column=1).number_format = 'dd/mm/yyyy'  # ← Format date
                                 ws_detail.cell(row=row_idx, column=2).value = row.get('Représentant')
                                 ws_detail.cell(row=row_idx, column=3).value = row.get('N°')
                                 ws_detail.cell(row=row_idx, column=4).value = row.get('Client')
@@ -228,6 +229,7 @@ if generate_button:
                                 cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
                             for row_idx, (_, row) in enumerate(df_filtered.iterrows(), 2):
                                 ws_detail.cell(row=row_idx, column=1).value = row.get('Date')
+                                ws_detail.cell(row=row_idx, column=1).number_format = 'dd/mm/yyyy'  # ← Format date
                                 ws_detail.cell(row=row_idx, column=2).value = row.get('Représentant')
                                 ws_detail.cell(row=row_idx, column=3).value = row.get('N°')
                                 ws_detail.cell(row=row_idx, column=4).value = row.get('Client')
@@ -244,6 +246,7 @@ if generate_button:
                             df['Tournée'] = pd.to_numeric(df['Tournée'], errors='coerce')
                             df_filtered = df[(df['Date'] >= start) & (df['Date'] <= end) & (df['Tournée'] > 0) & ((df['Représentant'].isin(calculator.SALES_REPS_6)) | (df['Représentant'].isna()))]
                             ws_detail = wb.create_sheet(f'Semaine_{week_num:02d}_Livraisons')
+                            
                             headers = ['Date', 'Représentant', 'Tournée', 'Client', 'Total HT', 'Total TTC']
                             for col_idx, header in enumerate(headers, 1):
                                 cell = ws_detail.cell(row=1, column=col_idx)
@@ -252,6 +255,7 @@ if generate_button:
                                 cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
                             for row_idx, (_, row) in enumerate(df_filtered.iterrows(), 2):
                                 ws_detail.cell(row=row_idx, column=1).value = row.get('Date')
+                                ws_detail.cell(row=row_idx, column=1).number_format = 'dd/mm/yyyy'  # ← Format date
                                 ws_detail.cell(row=row_idx, column=2).value = row.get('Représentant')
                                 ws_detail.cell(row=row_idx, column=3).value = row.get('Tournée')
                                 ws_detail.cell(row=row_idx, column=4).value = row.get('Client')
@@ -281,6 +285,78 @@ if generate_button:
                             for col in ['A', 'B', 'C', 'D', 'E']:
                                 ws_detail.column_dimensions[col].width = 15
 
+                        # ===== DELAIS =====
+                        df_delais = dfs.get("Expl_Loc_Delais", pd.DataFrame()).copy()
+                        if not df_delais.empty:
+                            # Conversions
+                            for col in ['Date', 'Date Creation Cde', 'Liv. souhaitée']:
+                                if col in df_delais.columns:
+                                    df_delais[col] = pd.to_datetime(df_delais[col], errors='coerce')
+                            df_delais['Tournée'] = pd.to_numeric(df_delais['Tournée'], errors='coerce')
+                            
+                            # Calculs
+                            df_delais['délai_livraison_souhaité'] = (
+                                df_delais['Liv. souhaitée'] - df_delais['Date Creation Cde']
+                            ).dt.days
+                            df_delais['delai_cde_2_livr'] = (
+                                (df_delais['Date'] - df_delais['Date Creation Cde']).dt.days -
+                                (df_delais['délai_livraison_souhaité'] - 1)
+                            )
+                            
+                            # Filtres
+                            df_filtered = df_delais[
+                                (df_delais['Date'] >= start_date) & 
+                                (df_delais['Date'] <= end_date) &
+                                (df_delais['délai_livraison_souhaité'] >= 0) &
+                                (df_delais['delai_cde_2_livr'] >= 0) & 
+                                (df_delais['delai_cde_2_livr'] <= 14) &
+                                (df_delais['Tournée'] > 3000)
+                            ]
+                            
+                            ws_detail = wb.create_sheet(f'Semaine_{week_number:02d}_Delais')
+                            headers = list(df_filtered.columns)
+                            for col_idx, header in enumerate(headers, 1):
+                                cell = ws_detail.cell(row=1, column=col_idx)
+                                cell.value = header
+                                cell.font = Font(bold=True, color="FFFFFF")
+                                cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+                            
+                            for row_idx, (_, row) in enumerate(df_filtered.iterrows(), 2):
+                                for col_idx, (col_name, value) in enumerate(row.items(), 1):
+                                    cell = ws_detail.cell(row=row_idx, column=col_idx)
+                                    cell.value = value
+                                    if isinstance(value, (datetime, pd.Timestamp)):
+                                        cell.number_format = 'dd/mm/yyyy'
+                                    if col_name == 'Tournée' and isinstance(value, (int, float)):
+                                        cell.number_format = '0'
+                    
+                        # ===== EN ATTENTE =====
+                        df_en_attente = dfs.get("Commandes_ALivrer", pd.DataFrame()).copy()
+                        if not df_en_attente.empty:
+                            df_en_attente['Livraison'] = pd.to_datetime(df_en_attente['Livraison'], errors='coerce')
+                            
+                            date_min = datetime(2026, 1, 1)
+                            df_filtered = df_en_attente[
+                                (df_en_attente['Livraison'] >= date_min) & 
+                                (df_en_attente['Livraison'] <= end_date) &
+                                (df_en_attente['Représentant'].isin(calculator.SALES_REPS_6))
+                            ]
+                            
+                            ws_detail = wb.create_sheet(f'Semaine_{week_number:02d}_EnAttente')
+                            headers = list(df_filtered.columns)
+                            for col_idx, header in enumerate(headers, 1):
+                                cell = ws_detail.cell(row=1, column=col_idx)
+                                cell.value = header
+                                cell.font = Font(bold=True, color="FFFFFF")
+                                cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+                            
+                            for row_idx, (_, row) in enumerate(df_filtered.iterrows(), 2):
+                                for col_idx, (col_name, value) in enumerate(row.items(), 1):
+                                    cell = ws_detail.cell(row=row_idx, column=col_idx)
+                                    cell.value = value
+                                    if isinstance(value, (datetime, pd.Timestamp)):
+                                        cell.number_format = 'dd/mm/yyyy'
+                                    
                     # Créer feuilles et remplir snapshot
                     create_detail_sheets(wb, loader, calculator, week_number, start_date, end_date)
                     # Créer feuille "Delais" avec design et format
