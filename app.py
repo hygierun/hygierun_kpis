@@ -286,7 +286,30 @@ if generate_button:
                     # Créer feuille "Delais" avec design et format
                     df_delais = loader.dfs.get("Expl_Loc_Delais", pd.DataFrame()).copy()
                     if not df_delais.empty:
-                        # [conversions et filtres comme avant...]
+                        # Convertir dates et nombres
+                        for col in ['Date', 'Date Creation Cde', 'Liv. souhaitée']:
+                            if col in df_delais.columns:
+                                df_delais[col] = pd.to_datetime(df_delais[col], errors='coerce')
+                        df_delais['Tournée'] = pd.to_numeric(df_delais['Tournée'], errors='coerce')
+                        
+                        # Calculer les colonnes de délai
+                        df_delais['délai_livraison_souhaité'] = (
+                            df_delais['Liv. souhaitée'] - df_delais['Date Creation Cde']
+                        ).dt.days
+                        df_delais['delai_cde_2_livr'] = (
+                            (df_delais['Date'] - df_delais['Date Creation Cde']).dt.days -
+                            (df_delais['délai_livraison_souhaité'] - 1)
+                        )
+                        
+                        # APPLIQUER LES MÊMES FILTRES QUE LE CALCUL
+                        df_filtered = df_delais[
+                            (df_delais['Date'] >= start_date) & 
+                            (df_delais['Date'] <= end_date) &
+                            (df_delais['délai_livraison_souhaité'] >= 0) &
+                            (df_delais['delai_cde_2_livr'] >= 0) & 
+                            (df_delais['delai_cde_2_livr'] <= 14) &
+                            (df_delais['Tournée'] > 3000)
+                        ]
                         
                         ws_delais = wb.create_sheet(f'Semaine_{week_number:02d}_Delais')
                         
