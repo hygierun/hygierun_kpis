@@ -164,7 +164,14 @@ if generate_button:
                     # IMPORTANT: Charger avec data_only=False pour garder les formules et les données
                     wb = load_workbook(str(snapshot_path))
                     ws = wb.active
-
+                    
+                    # Supprimer les feuilles de détail existantes (garder seulement la feuille KPI principale)
+                    feuilles_a_garder = [ws.title]  # La feuille active (KPI)
+                    for sheet_name in wb.sheetnames:
+                        if sheet_name not in feuilles_a_garder:
+                            wb.remove(wb[sheet_name])
+                            st.info(f"🗑️ Feuille supprimée: {sheet_name}")
+                            
                     # Snapshot backup: Lire les données existantes AVANT modification
                     existing_data = {}
                     for row in ws.iter_rows(min_row=3, max_row=100, min_col=1, max_col=14):
