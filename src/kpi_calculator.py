@@ -8,7 +8,6 @@ Chaque KPI suit la recette précise documentée et validée avec Antoine.
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple, List
-from .utils import DateHelper, FormatHelper
 
 
 class KPICalculator:
