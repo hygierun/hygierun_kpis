@@ -12,6 +12,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from src import WeeklyDataLoader, KPICalculator
+from src.monthly_commerce_excel import SUMMARY_HEADERS, summary_rows
+from src.monthly_loader import MONTHS_FR, commerce_required_columns
+from src.monthly_report import build_commerce_report
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
@@ -466,25 +469,100 @@ def run_weekly_report():
     st.caption("💡 Astuce: Vous pouvez télécharger les fichiers d'exemple pour tester l'application")
 
 
+def _fmt_number(value):
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ""
+    if isinstance(value, float):
+        return f"{value:,.1f}".replace(",", " ").replace(".", ",")
+    return f"{value:,}".replace(",", " ")
+
+
+def _fmt_evolution(value):
+    if value is None or pd.isna(value):
+        return ""
+    return f"{value:+.1f} %".replace(".", ",")
+
+
+def _summary_dataframe(result):
+    records = []
+    for row in summary_rows(result):
+        if row is None:
+            continue
+        if len(row) == 1:
+            records.append({SUMMARY_HEADERS[0]: f"— {row[0]} —", **{h: "" for h in SUMMARY_HEADERS[1:]}})
+            continue
+        label, value, n1, evo_n1, m1, evo_m1 = row
+        records.append({
+            SUMMARY_HEADERS[0]: label, SUMMARY_HEADERS[1]: _fmt_number(value), SUMMARY_HEADERS[2]: _fmt_number(n1),
+            SUMMARY_HEADERS[3]: _fmt_evolution(evo_n1), SUMMARY_HEADERS[4]: _fmt_number(m1), SUMMARY_HEADERS[5]: _fmt_evolution(evo_m1),
+        })
+    return pd.DataFrame(records)
+
+
 def run_monthly_report():
-    """Onglet Bilan Mensuel (en cours de construction - Phases B-E)"""
+    """Onglet Bilan Mensuel - section Commerce (les autres sections arrivent une par une)"""
 
-    st.info(
-        "🚧 Le Bilan Mensuel est en cours de développement.\n\n"
-        "Cette section attend encore quelques éléments avant de pouvoir "
-        "calculer les KPIs et générer les livrables (6 Excel + PowerPoint)."
-    )
+    st.subheader("🛒 Section Commerce")
 
-    with st.expander("📁 Fichiers attendus (aperçu de l'interface finale)", expanded=True):
-        st.file_uploader("Fichier de données brutes mensuel", type="xlsx", disabled=True, key="monthly_input")
-        st.file_uploader("Archive fiches SAV (ZIP)", type="zip", disabled=True, key="monthly_sav_zip")
-        st.file_uploader("Fichier données GPS", disabled=True, key="monthly_gps")
-        col_m, col_y = st.columns(2)
-        with col_m:
-            st.selectbox("Mois", list(range(1, 13)), index=7, disabled=True, key="monthly_month")
-        with col_y:
-            st.number_input("Année", value=2026, disabled=True, key="monthly_year")
-        st.button("🚀 Générer Bilan Mensuel", disabled=True, use_container_width=True, key="monthly_generate")
+    today = datetime.now()
+    default_year, default_month = (today.year - 1, 12) if today.month == 1 else (today.year, today.month - 1)
+
+    col_file, col_period = st.columns([2, 1], gap="medium")
+    with col_file:
+        uploaded = st.file_uploader(
+            "Input mensuel Commerce",
+            type="xlsx",
+            help="Input_Mensuel_Commerce.xlsx : feuilles Cdes_ALivr, Cdes_Arch, Fact_Arch, Livr_Arch, Stats_NewClients, top10",
+            key="monthly_commerce_input",
+        )
+    with col_period:
+        month = st.selectbox("Mois", list(range(1, 13)), index=default_month - 1,
+                             format_func=lambda m: MONTHS_FR[m - 1], key="monthly_month")
+        year = st.number_input("Année", min_value=2020, max_value=2100, value=default_year, step=1, key="monthly_year")
+
+    year = int(year)
+    with st.expander("📋 Colonnes obligatoires dans le fichier input", expanded=False):
+        st.caption("Ces colonnes doivent exister (avec ces noms exacts) pour que les calculs fonctionnent.")
+        for sheet, cols in commerce_required_columns(year, month).items():
+            st.markdown(f"**{sheet}** : " + ", ".join(f"`{c}`" for c in cols))
+
+    if st.button("🚀 Générer Commerce", use_container_width=True, type="primary", key="monthly_generate"):
+        if not uploaded:
+            st.error("❌ Veuillez charger le fichier Input mensuel Commerce", icon="📋")
+        else:
+            try:
+                with st.spinner("⏳ Traitement en cours..."):
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        input_path = Path(tmpdir) / "input_commerce.xlsx"
+                        input_path.write_bytes(uploaded.getbuffer())
+                        st.session_state["monthly_commerce"] = build_commerce_report(str(input_path), year, month)
+            except Exception as e:
+                st.session_state.pop("monthly_commerce", None)
+                st.error(f"❌ Erreur: {e}")
+
+    report = st.session_state.get("monthly_commerce")
+    if report:
+        result = report["result"]
+        period = f"{MONTHS_FR[result['month'] - 1]} {result['year']}"
+        st.success(f"✅ Section Commerce générée pour {period}")
+
+        st.dataframe(_summary_dataframe(result), hide_index=True, use_container_width=True, height=600)
+
+        col_x, col_p = st.columns(2)
+        with col_x:
+            st.download_button(
+                "📥 Télécharger l'Excel Commerce", data=report["excel"],
+                file_name=f"Commerce_{result['year']}-{result['month']:02d}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True, key="monthly_dl_excel",
+            )
+        with col_p:
+            st.download_button(
+                "📥 Télécharger les diapos Commerce", data=report["pptx"],
+                file_name=f"KPI_Commerce_{MONTHS_FR[result['month'] - 1]}{result['year']}.pptx",
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                use_container_width=True, key="monthly_dl_pptx",
+            )
 
 
 tab_weekly, tab_monthly = st.tabs(["📊 Rapport Hebdomadaire", "📈 Bilan Mensuel"])
