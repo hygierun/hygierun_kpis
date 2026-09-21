@@ -4,11 +4,15 @@ import tempfile
 from pathlib import Path
 from typing import Dict
 
-from . import monthly_commerce_excel, monthly_preparation_excel
+from . import monthly_commerce_excel, monthly_livraison_excel, monthly_preparation_excel
 from .monthly_commerce import CommerceCalculator
 from .monthly_commerce_excel import generate_commerce_excel
 from .monthly_commerce_pptx import generate_commerce_pptx
-from .monthly_loader import MonthlyDataLoader, commerce_required_columns, preparation_required_columns
+from .monthly_livraison import LivraisonComptaCalculator
+from .monthly_livraison_excel import generate_livraison_excel
+from .monthly_livraison_pptx import generate_livraison_pptx
+from .monthly_loader import (MonthlyDataLoader, commerce_required_columns, livraison_compta_required_columns,
+                             preparation_required_columns)
 from .monthly_preparation import PreparationCalculator
 from .monthly_preparation_excel import generate_preparation_excel
 from .monthly_preparation_pptx import generate_preparation_pptx
@@ -16,15 +20,16 @@ from .monthly_preparation_pptx import generate_preparation_pptx
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 COMMERCE_TEMPLATE = TEMPLATES_DIR / "KPI_Commerce.pptx"
 PREPARATION_TEMPLATE = TEMPLATES_DIR / "KPI_Preparation.pptx"
+LIVRAISON_TEMPLATE = TEMPLATES_DIR / "KPI_Livraison_Compta.pptx"
 
 
 def _build_report(loader_method: str, calculator_cls, excel_module, generate_excel, generate_pptx,
-                  template_path: Path, input_path: str, year: int, month: int) -> Dict:
+                  template_path: Path, input_path: str, year: int, month: int, **calculator_kwargs) -> Dict:
     loader = MonthlyDataLoader(input_path)
     if not getattr(loader, loader_method)(year, month):
         raise ValueError("\n".join(loader.errors))
 
-    calc = calculator_cls(loader.dfs)
+    calc = calculator_cls(loader.dfs, **calculator_kwargs)
     result = calc.compute(year, month)
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -48,6 +53,12 @@ def build_preparation_report(input_path: str, year: int, month: int, template_pa
                          generate_preparation_pptx, template_path, input_path, year, month)
 
 
+def build_livraison_report(input_path: str, year: int, month: int, template_path: Path = LIVRAISON_TEMPLATE,
+                           jours_recalage: int = 0) -> Dict:
+    return _build_report("load_livraison_compta", LivraisonComptaCalculator, monthly_livraison_excel, generate_livraison_excel,
+                         generate_livraison_pptx, template_path, input_path, year, month, jours_recalage=jours_recalage)
+
+
 MONTHLY_SECTIONS = {
     "commerce": {
         "label": "🛒 Commerce", "name": "Commerce",
@@ -58,5 +69,10 @@ MONTHLY_SECTIONS = {
         "label": "📦 Préparation", "name": "Préparation",
         "input_help": "Input_Mensuel_Preparation.xlsx : feuilles Livr_Arch, Ach_Recep",
         "required": preparation_required_columns, "build": build_preparation_report,
+    },
+    "livraison": {
+        "label": "🚚 Livraison & Compta", "name": "Livraison et Compta",
+        "input_help": "Input_Livraison_Compta.xlsx : feuilles Tournees, Livr_Arch, Delais Bis, Cdes_Arch, Fact_Dues, Clients (+ GPS_Livr à venir)",
+        "required": livraison_compta_required_columns, "build": build_livraison_report,
     },
 }

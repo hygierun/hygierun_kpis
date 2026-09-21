@@ -1,5 +1,6 @@
 """Chargement et validation des fichiers input du Bilan Mensuel (section par section)."""
 
+import warnings
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -34,15 +35,28 @@ PREPARATION_REQUIRED_COLUMNS: Dict[str, List[str]] = {
     "Ach_Recep": ["Fournisseur", "Total HT", "FFR", "Container", "Réception"],
 }
 
+LIVRAISON_COMPTA_REQUIRED_COLUMNS: Dict[str, List[str]] = {
+    "Tournees": ["Date", "Désignation", "Camion", "Total HT", "Nb bl A", "Nb fact"],
+    "Livr_Arch": ["Date", "Tournée", "Transporteur", "Total HT"],
+    "Delais Bis": ["Date", "Liv. souhaitée", "Tournée", "Date Creation Cde", "Fact date"],
+    "Cdes_Arch": ["Livraison", "Tournée", "Représentant", "Nb bls"],
+    "Fact_Dues": ["Date", "Client (réf.)", "Nb JEch", "Restant dû"],
+    "Clients": ["Désignation", "Qualification", "Solde cpta"],
+}
+
 DETAIL_COLUMNS: Dict[str, List[str]] = {
     "Cdes_ALivr": ["N°", "Client", "Total HT"],
     "Cdes_Arch": ["N°", "Client"],
     "Fact_Arch": ["N°", "Client"],
     "Livr_Arch": ["N°", "Client", "Représentant"],
     "Ach_Recep": ["N°", "Date"],
+    "Tournees": ["N°", "Chauffeur"],
+    "Delais Bis": ["N°"],
+    "Fact_Dues": ["N°", "Client"],
+    "Clients": ["Référence"],
 }
 
-DATE_COLUMNS = ["Date", "Livraison", "Liv. souhaitée", "Réception"]
+DATE_COLUMNS = ["Date", "Livraison", "Liv. souhaitée", "Réception", "Fact date", "Date Creation Cde"]
 
 
 def commerce_required_columns(year: int, month: int) -> Dict[str, List[str]]:
@@ -51,6 +65,12 @@ def commerce_required_columns(year: int, month: int) -> Dict[str, List[str]]:
     required = {sheet: list(cols) for sheet, cols in COMMERCE_REQUIRED_COLUMNS.items()}
     required["Stats_NewClients"] += [month_column(year, month), month_column(py, pm)]
     required["top10"] += [month_column(year, month, "HT"), month_column(year, month, "Qté")]
+    return required
+
+
+def livraison_compta_required_columns(year: int, month: int) -> Dict[str, List[str]]:
+    required = {sheet: list(cols) for sheet, cols in LIVRAISON_COMPTA_REQUIRED_COLUMNS.items()}
+    required["Clients"].append(f"Vtes {year}")
     return required
 
 
@@ -72,6 +92,9 @@ class MonthlyDataLoader:
     def load_preparation(self, year: int, month: int) -> bool:
         return self._load(preparation_required_columns(year, month))
 
+    def load_livraison_compta(self, year: int, month: int) -> bool:
+        return self._load(livraison_compta_required_columns(year, month))
+
     def _load(self, required: Dict[str, List[str]]) -> bool:
         self.errors = []
 
@@ -79,6 +102,7 @@ class MonthlyDataLoader:
             self.errors.append(f"Fichier introuvable : {self.excel_path}")
             return False
 
+        warnings.filterwarnings("ignore", module="openpyxl")
         with pd.ExcelFile(self.excel_path) as xl:
             missing_sheets = [s for s in required if s not in xl.sheet_names]
             if missing_sheets:
