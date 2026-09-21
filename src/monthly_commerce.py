@@ -107,7 +107,7 @@ class CommerceCalculator:
                          ("reliquats", rows[rows["Type"] == "Cde avec reliquats"]),
                          ("total", rows)):
             out[key] = {
-                "nb": len(sub),
+                "nb": int(sub["Hors Franck"].sum()),
                 "net_avec": sub["A livrer Net"].sum(),
                 "net_sans": sub[sub["Hors Franck"]]["A livrer Net"].sum(),
             }

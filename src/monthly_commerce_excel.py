@@ -59,7 +59,7 @@ def summary_rows(result: dict) -> List[Optional[list]]:
     ]
     for label, key in (("Commande initiale", "initiale"), ("Cde avec reliquats", "reliquats"), ("TOTAL", "total")):
         rows += [
-            [f"{label} - nb (Franck + vide)", ea[key]["nb"], None, None, None, None],
+            [f"{label} - nb (hors Franck)", ea[key]["nb"], None, None, None, None],
             [f"{label} - montant avec Franck (+ vide)", ea[key]["net_avec"], None, None, None, None],
             [f"{label} - montant hors Franck", ea[key]["net_sans"], None, None, None, None],
         ]
