@@ -3,19 +3,11 @@
 from pathlib import Path
 from typing import List, Optional
 
-import pandas as pd
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
-from openpyxl.utils import get_column_letter
 
+from .excel_helpers import SUMMARY_HEADERS, select_columns, write_frame, write_summary  # noqa: F401
 from .monthly_commerce import CommerceCalculator, SEUILS_LIVRAISON
 from .monthly_loader import MONTHS_FR
-
-HEADER_FILL = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-HEADER_FONT = Font(bold=True, color="FFFFFF")
-SECTION_FONT = Font(bold=True, color="366092")
-
-SUMMARY_HEADERS = ["Indicateur", "Valeur", "N-1", "Évol. N-1 (%)", "Mois-1", "Évol. Mois-1 (%)"]
 
 
 def summary_rows(result: dict) -> List[Optional[list]]:
@@ -66,72 +58,24 @@ def summary_rows(result: dict) -> List[Optional[list]]:
     return rows
 
 
-def _write_summary(ws, result: dict):
-    year, month = result["year"], result["month"]
-    ws.append([f"Commerce - {MONTHS_FR[month - 1]} {year}"])
-    ws["A1"].font = Font(bold=True, size=14)
-    ws.append([])
-    ws.append(SUMMARY_HEADERS)
-    for col in range(1, len(SUMMARY_HEADERS) + 1):
-        cell = ws.cell(row=3, column=col)
-        cell.font, cell.fill = HEADER_FONT, HEADER_FILL
-
-    for row in summary_rows(result):
-        if row is None:
-            ws.append([])
-        elif len(row) == 1:
-            ws.append(row)
-            ws.cell(row=ws.max_row, column=1).font = SECTION_FONT
-        else:
-            ws.append([None if (isinstance(v, float) and pd.isna(v)) else v for v in row])
-            for col in (2, 3, 5):
-                ws.cell(row=ws.max_row, column=col).number_format = "#,##0.0" if isinstance(row[col - 1], float) else "#,##0"
-            for col in (4, 6):
-                ws.cell(row=ws.max_row, column=col).number_format = "+0.0;-0.0;0.0"
-
-    ws.column_dimensions["A"].width = 52
-    for col in "BCDEF":
-        ws.column_dimensions[col].width = 16
-
-
-def _write_frame(wb: Workbook, title: str, df: pd.DataFrame):
-    ws = wb.create_sheet(title)
-    for col_idx, name in enumerate(df.columns, 1):
-        cell = ws.cell(row=1, column=col_idx, value=name)
-        cell.font, cell.fill = HEADER_FONT, HEADER_FILL
-        ws.column_dimensions[get_column_letter(col_idx)].width = max(14, min(50, len(str(name)) + 4))
-    for row_idx, row in enumerate(df.itertuples(index=False), 2):
-        for col_idx, value in enumerate(row, 1):
-            if isinstance(value, float) and pd.isna(value):
-                value = None
-            elif isinstance(value, pd.Timestamp):
-                value = value.to_pydatetime()
-            cell = ws.cell(row=row_idx, column=col_idx, value=value)
-            if hasattr(value, "year"):
-                cell.number_format = "dd/mm/yyyy"
-
-
 def generate_commerce_excel(calc: CommerceCalculator, result: dict, output_path: str) -> str:
     year, month = result["year"], result["month"]
     wb = Workbook()
     ws = wb.active
     ws.title = "Synthèse"
-    _write_summary(ws, result)
+    write_summary(ws, f"Commerce - {MONTHS_FR[month - 1]} {year}", summary_rows(result))
 
-    def cols(df: pd.DataFrame, wanted: List[str]) -> pd.DataFrame:
-        return df[[c for c in wanted if c in df.columns]]
-
-    _write_frame(wb, "Commandes", cols(calc.commandes_rows(year, month),
+    write_frame(wb, "Commandes", select_columns(calc.commandes_rows(year, month),
                  ["Source", "Date", "N°", "Client", "Représentant", "Total HT", "A livrer Net", "Montant retenu"]))
-    _write_frame(wb, "Factures", cols(calc.factures_rows(year, month, True), ["Date", "N°", "Client", "Représentant", "Total HT"]))
-    _write_frame(wb, "Livraisons_seuils", cols(calc.seuils_rows(year, month), ["Date", "N°", "Tournée", "Client", "Représentant", "Total HT"]))
-    _write_frame(wb, "En_attente", cols(calc.en_attente_rows(year, month),
+    write_frame(wb, "Factures", select_columns(calc.factures_rows(year, month, True), ["Date", "N°", "Client", "Représentant", "Total HT"]))
+    write_frame(wb, "Livraisons_seuils", select_columns(calc.seuils_rows(year, month), ["Date", "N°", "Tournée", "Client", "Représentant", "Total HT"]))
+    write_frame(wb, "En_attente", select_columns(calc.en_attente_rows(year, month),
                  ["Type", "Date", "Livraison", "N°", "Client", "Représentant", "Rlq", "Total HT", "A livrer Net"]))
-    _write_frame(wb, "Nouveaux_clients", calc.nouveaux_clients_rows(year, month))
+    write_frame(wb, "Nouveaux_clients", calc.nouveaux_clients_rows(year, month))
 
     top = result["data"]["cur"]["top_ventes"]
-    _write_frame(wb, "Top_valeur", top["valeur"])
-    _write_frame(wb, "Top_volume", top["volume"])
+    write_frame(wb, "Top_valeur", top["valeur"])
+    write_frame(wb, "Top_volume", top["volume"])
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     wb.save(output_path)

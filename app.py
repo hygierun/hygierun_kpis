@@ -12,9 +12,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from src import WeeklyDataLoader, KPICalculator
-from src.monthly_commerce_excel import SUMMARY_HEADERS, summary_rows
-from src.monthly_loader import MONTHS_FR, commerce_required_columns
-from src.monthly_report import build_commerce_report
+from src.excel_helpers import SUMMARY_HEADERS
+from src.monthly_loader import MONTHS_FR
+from src.monthly_report import MONTHLY_SECTIONS
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
@@ -483,9 +483,9 @@ def _fmt_evolution(value):
     return f"{value:+.1f} %".replace(".", ",")
 
 
-def _summary_dataframe(result):
+def _summary_dataframe(rows):
     records = []
-    for row in summary_rows(result):
+    for row in rows:
         if row is None:
             continue
         if len(row) == 1:
@@ -499,70 +499,73 @@ def _summary_dataframe(result):
     return pd.DataFrame(records)
 
 
-def run_monthly_report():
-    """Onglet Bilan Mensuel - section Commerce (les autres sections arrivent une par une)"""
+def _monthly_section(key: str, section: dict, year: int, month: int):
+    """Une section du Bilan Mensuel : upload de son input, génération, aperçu et téléchargements."""
+    state_key = f"monthly_{key}"
+    uploaded = st.file_uploader(f"Input mensuel {section['name']}", type="xlsx", help=section["input_help"],
+                                key=f"{state_key}_input")
 
-    st.subheader("🛒 Section Commerce")
-
-    today = datetime.now()
-    default_year, default_month = (today.year - 1, 12) if today.month == 1 else (today.year, today.month - 1)
-
-    col_file, col_period = st.columns([2, 1], gap="medium")
-    with col_file:
-        uploaded = st.file_uploader(
-            "Input mensuel Commerce",
-            type="xlsx",
-            help="Input_Mensuel_Commerce.xlsx : feuilles Cdes_ALivr, Cdes_Arch, Fact_Arch, Livr_Arch, Stats_NewClients, top10",
-            key="monthly_commerce_input",
-        )
-    with col_period:
-        month = st.selectbox("Mois", list(range(1, 13)), index=default_month - 1,
-                             format_func=lambda m: MONTHS_FR[m - 1], key="monthly_month")
-        year = st.number_input("Année", min_value=2020, max_value=2100, value=default_year, step=1, key="monthly_year")
-
-    year = int(year)
     with st.expander("📋 Colonnes obligatoires dans le fichier input", expanded=False):
         st.caption("Ces colonnes doivent exister (avec ces noms exacts) pour que les calculs fonctionnent.")
-        for sheet, cols in commerce_required_columns(year, month).items():
+        for sheet, cols in section["required"](year, month).items():
             st.markdown(f"**{sheet}** : " + ", ".join(f"`{c}`" for c in cols))
 
-    if st.button("🚀 Générer Commerce", use_container_width=True, type="primary", key="monthly_generate"):
+    if st.button(f"🚀 Générer {section['name']}", use_container_width=True, type="primary", key=f"{state_key}_generate"):
         if not uploaded:
-            st.error("❌ Veuillez charger le fichier Input mensuel Commerce", icon="📋")
+            st.error(f"❌ Veuillez charger le fichier Input mensuel {section['name']}", icon="📋")
         else:
             try:
                 with st.spinner("⏳ Traitement en cours..."):
                     with tempfile.TemporaryDirectory() as tmpdir:
-                        input_path = Path(tmpdir) / "input_commerce.xlsx"
+                        input_path = Path(tmpdir) / f"input_{key}.xlsx"
                         input_path.write_bytes(uploaded.getbuffer())
-                        st.session_state["monthly_commerce"] = build_commerce_report(str(input_path), year, month)
+                        st.session_state[state_key] = section["build"](str(input_path), year, month)
             except Exception as e:
-                st.session_state.pop("monthly_commerce", None)
+                st.session_state.pop(state_key, None)
                 st.error(f"❌ Erreur: {e}")
 
-    report = st.session_state.get("monthly_commerce")
+    report = st.session_state.get(state_key)
     if report:
         result = report["result"]
         period = f"{MONTHS_FR[result['month'] - 1]} {result['year']}"
-        st.success(f"✅ Section Commerce générée pour {period}")
+        st.success(f"✅ Section {section['name']} générée pour {period}")
 
-        st.dataframe(_summary_dataframe(result), hide_index=True, use_container_width=True, height=600)
+        st.dataframe(_summary_dataframe(report["summary"]), hide_index=True, use_container_width=True, height=min(600, 40 + 35 * len(report["summary"])))
 
         col_x, col_p = st.columns(2)
         with col_x:
             st.download_button(
-                "📥 Télécharger l'Excel Commerce", data=report["excel"],
-                file_name=f"Commerce_{result['year']}-{result['month']:02d}.xlsx",
+                f"📥 Télécharger l'Excel {section['name']}", data=report["excel"],
+                file_name=f"{key.capitalize()}_{result['year']}-{result['month']:02d}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True, key="monthly_dl_excel",
+                use_container_width=True, key=f"{state_key}_dl_excel",
             )
         with col_p:
             st.download_button(
-                "📥 Télécharger les diapos Commerce", data=report["pptx"],
-                file_name=f"KPI_Commerce_{MONTHS_FR[result['month'] - 1]}{result['year']}.pptx",
+                f"📥 Télécharger les diapos {section['name']}", data=report["pptx"],
+                file_name=f"KPI_{key.capitalize()}_{MONTHS_FR[result['month'] - 1]}{result['year']}.pptx",
                 mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                use_container_width=True, key="monthly_dl_pptx",
+                use_container_width=True, key=f"{state_key}_dl_pptx",
             )
+
+
+def run_monthly_report():
+    """Onglet Bilan Mensuel : une sous-section par domaine (les autres arrivent une par une)"""
+
+    today = datetime.now()
+    default_year, default_month = (today.year - 1, 12) if today.month == 1 else (today.year, today.month - 1)
+
+    col_month, col_year = st.columns(2, gap="medium")
+    with col_month:
+        month = st.selectbox("Mois", list(range(1, 13)), index=default_month - 1,
+                             format_func=lambda m: MONTHS_FR[m - 1], key="monthly_month")
+    with col_year:
+        year = int(st.number_input("Année", min_value=2020, max_value=2100, value=default_year, step=1, key="monthly_year"))
+
+    section_tabs = st.tabs([section["label"] for section in MONTHLY_SECTIONS.values()])
+    for tab, (key, section) in zip(section_tabs, MONTHLY_SECTIONS.items()):
+        with tab:
+            _monthly_section(key, section, year, month)
 
 
 tab_weekly, tab_monthly = st.tabs(["📊 Rapport Hebdomadaire", "📈 Bilan Mensuel"])

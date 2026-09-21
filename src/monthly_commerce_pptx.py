@@ -2,118 +2,18 @@
 
 from copy import deepcopy
 from pathlib import Path
-from typing import Optional
 
 from pptx import Presentation
-from pptx.dml.color import RGBColor
 from pptx.oxml.ns import qn
 from pptx.util import Emu
 
 from .monthly_commerce import SEUILS_LIVRAISON, month_bounds
 from .monthly_loader import MONTHS_FR
-
-GREEN = RGBColor(46, 125, 50)
-RED = RGBColor(192, 57, 43)
-GREY = RGBColor(138, 155, 163)
-COMMENT_PLACEHOLDER = "Commentaire du mois : à compléter"
+from .pptx_helpers import COMMENT_PLACEHOLDER, find_shape, fr, fr_k, set_cell, set_delta, set_subtitle, set_text, set_paragraph
 
 # Colonnes du tableau "en attente" : libellé, nb, montant avec Franck, montant hors Franck
 EN_ATTENTE_COL_WIDTHS = [1589405, 450000, 1000000, 1000000]
 EN_ATTENTE_TABLE_LEFT = 540000
-
-
-def fr(value: float, decimals: int = 0) -> str:
-    return f"{value:.{decimals}f}".replace(".", ",")
-
-
-def fr_k(value: float, decimals: int = 0) -> str:
-    return f"{fr(value / 1000, decimals)} k€"
-
-
-def fr_pct(value: Optional[float], decimals: int = 0) -> str:
-    """'+13 %' / '−28 %' ; les décimales nulles sont supprimées (+12,0 -> +12)."""
-    if value is None:
-        return "n/a"
-    text = fr(abs(value), decimals)
-    if decimals and text.endswith("," + "0" * decimals):
-        text = text[: -(decimals + 1)]
-    sign = "+" if value > 0 else ("−" if value < 0 else "")
-    return f"{sign}{text} %"
-
-
-def arrow(value: Optional[float]) -> str:
-    if value is None or value == 0:
-        return "►"
-    return "▲" if value > 0 else "▼"
-
-
-def delta_color(value: Optional[float]) -> RGBColor:
-    if value is None or value == 0:
-        return GREY
-    return GREEN if value > 0 else RED
-
-
-def find_shape(slide, shape_id: int):
-    def rec(shapes):
-        for shape in shapes:
-            if shape.shape_id == shape_id:
-                return shape
-            if shape.shape_type == 6:
-                found = rec(shape.shapes)
-                if found is not None:
-                    return found
-        return None
-
-    shape = rec(slide.shapes)
-    if shape is None:
-        raise KeyError(f"Forme {shape_id} introuvable dans le template")
-    return shape
-
-
-def _set_paragraph(paragraph, text: str, color: Optional[RGBColor] = None):
-    runs = paragraph.runs
-    runs[0].text = text
-    for extra in runs[1:]:
-        extra._r.getparent().remove(extra._r)
-    if color is not None:
-        runs[0].font.color.rgb = color
-
-
-def set_text(shape, text: str):
-    paragraphs = shape.text_frame.paragraphs
-    _set_paragraph(paragraphs[0], text)
-    for extra in paragraphs[1:]:
-        extra._p.getparent().remove(extra._p)
-
-
-def set_delta(shape, reference: str, pct: Optional[float], decimals: int = 0):
-    """Ligne de référence (ex. 'N-1 : 860 cdes') + ligne d'évolution colorée."""
-    paragraphs = shape.text_frame.paragraphs
-    delta = f"{arrow(pct)} {fr_pct(pct, decimals)}"
-    if len(paragraphs) >= 2:
-        _set_paragraph(paragraphs[0], reference)
-        _set_paragraph(paragraphs[1], delta, delta_color(pct))
-        return
-    # Cas d'un seul paragraphe : "référence <saut de ligne> flèche + valeur" en plusieurs runs
-    runs = paragraphs[0].runs
-    runs[0].text = reference
-    runs[1].text, runs[1].font.color.rgb = arrow(pct), delta_color(pct)
-    runs[2].text = " "
-    runs[3].text, runs[3].font.color.rgb = fr_pct(pct, decimals), delta_color(pct)
-
-
-def set_subtitle(shape, year: int, month: int):
-    runs = shape.text_frame.paragraphs[0].runs
-    runs[1].text = MONTHS_FR[month - 1]
-    runs[2].text = f" {year}"
-
-
-def set_cell(cell, text: str):
-    paragraph = cell.text_frame.paragraphs[0]
-    if paragraph.runs:
-        _set_paragraph(paragraph, text)
-    else:
-        paragraph.add_run().text = text
 
 
 def _fill_slide1(slide, result: dict):
@@ -199,19 +99,19 @@ def _fill_slide2(slide, result: dict):
 
     set_text(find_shape(slide, 43), f"{cur['nouveaux_clients']['nb']} clients")
     set_text(find_shape(slide, 46), fr_k(cur["nouveaux_clients"]["ca"], 1))
-    set_delta(find_shape(slide, 49), f"Mois -1 : {m1['nouveaux_clients']['nb']}", e["nouveaux_clients_nb_m1"], 1)
-    set_delta(find_shape(slide, 57), f"Mois -1 : {fr_k(m1['nouveaux_clients']['ca'], 1)}", e["nouveaux_clients_ca_m1"], 1)
+    set_delta(find_shape(slide, 49), f"Mois -1 : {m1['nouveaux_clients']['nb']}", e["nouveaux_clients_nb_m1"])
+    set_delta(find_shape(slide, 57), f"Mois -1 : {fr_k(m1['nouveaux_clients']['ca'], 1)}", e["nouveaux_clients_ca_m1"])
 
     seuil_shapes = {100: {"value": 17, "share": 61, "n1": 21, "m1": 55}, 150: {"value": 34, "share": 63, "n1": 50, "m1": 59}}
     for seuil in SEUILS_LIVRAISON:
         ids = seuil_shapes[seuil]
         s = cur["seuils"]
         set_text(find_shape(slide, ids["value"]), f"         {s[f'nb_{seuil}']}")
-        _set_paragraph(find_shape(slide, ids["share"]).text_frame.paragraphs[0], f"{s[f'part_{seuil}']:.0f}% cdes clients")
+        set_paragraph(find_shape(slide, ids["share"]).text_frame.paragraphs[0], f"{s[f'part_{seuil}']:.0f}% cdes clients")
         for key, label in (("n1", "N-1"), ("m1", "Mois-1")):
             ref = d[key]["seuils"]
             set_delta(find_shape(slide, ids[key]), f"{label} : {ref[f'nb_{seuil}']} = {ref[f'part_{seuil}']:.0f}%",
-                      e[f"seuil_{seuil}_{key}"], 1)
+                      e[f"seuil_{seuil}_{key}"])
 
 
 def _fill_slide3(slide, result: dict):

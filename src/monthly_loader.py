@@ -29,14 +29,20 @@ COMMERCE_REQUIRED_COLUMNS: Dict[str, List[str]] = {
     "top10": ["Article réf", "Article"],
 }
 
-COMMERCE_DETAIL_COLUMNS: Dict[str, List[str]] = {
+PREPARATION_REQUIRED_COLUMNS: Dict[str, List[str]] = {
+    "Livr_Arch": ["Date", "Tournée", "Client", "Total HT"],
+    "Ach_Recep": ["Fournisseur", "Total HT", "FFR", "Container", "Réception"],
+}
+
+DETAIL_COLUMNS: Dict[str, List[str]] = {
     "Cdes_ALivr": ["N°", "Client", "Total HT"],
     "Cdes_Arch": ["N°", "Client"],
     "Fact_Arch": ["N°", "Client"],
-    "Livr_Arch": ["N°", "Client"],
+    "Livr_Arch": ["N°", "Client", "Représentant"],
+    "Ach_Recep": ["N°", "Date"],
 }
 
-COMMERCE_DATE_COLUMNS = ["Date", "Livraison", "Liv. souhaitée"]
+DATE_COLUMNS = ["Date", "Livraison", "Liv. souhaitée", "Réception"]
 
 
 def commerce_required_columns(year: int, month: int) -> Dict[str, List[str]]:
@@ -48,6 +54,10 @@ def commerce_required_columns(year: int, month: int) -> Dict[str, List[str]]:
     return required
 
 
+def preparation_required_columns(year: int, month: int) -> Dict[str, List[str]]:
+    return {sheet: list(cols) for sheet, cols in PREPARATION_REQUIRED_COLUMNS.items()}
+
+
 class MonthlyDataLoader:
     """Charge les feuilles d'un Input mensuel et vérifie la présence des colonnes requises."""
 
@@ -57,7 +67,12 @@ class MonthlyDataLoader:
         self.errors: List[str] = []
 
     def load_commerce(self, year: int, month: int) -> bool:
-        required = commerce_required_columns(year, month)
+        return self._load(commerce_required_columns(year, month))
+
+    def load_preparation(self, year: int, month: int) -> bool:
+        return self._load(preparation_required_columns(year, month))
+
+    def _load(self, required: Dict[str, List[str]]) -> bool:
         self.errors = []
 
         if not Path(self.excel_path).exists():
@@ -71,13 +86,13 @@ class MonthlyDataLoader:
                 return False
 
             for sheet, cols in required.items():
-                wanted = set(cols) | set(COMMERCE_DETAIL_COLUMNS.get(sheet, []))
+                wanted = set(cols) | set(DETAIL_COLUMNS.get(sheet, []))
                 df = xl.parse(sheet, usecols=lambda c, w=wanted: c in w)
                 missing_cols = [c for c in cols if c not in df.columns]
                 if missing_cols:
                     self.errors.append(f"Feuille '{sheet}' : colonnes manquantes : {', '.join(missing_cols)}")
                     continue
-                for col in COMMERCE_DATE_COLUMNS:
+                for col in DATE_COLUMNS:
                     if col in df.columns:
                         df[col] = pd.to_datetime(df[col], errors="coerce")
                 self.dfs[sheet] = df
