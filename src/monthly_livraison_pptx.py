@@ -1,7 +1,4 @@
-"""Remplit le template PowerPoint Livraison + Compta (3 diapos) avec les KPI calculés.
-
-Les blocs GPS de la diapo 1 (nb d'arrêts, distance, tableau par livreur) restent à "n/a" tant qu'ils ne sont pas recalculés.
-"""
+"""Remplit le template PowerPoint Livraison + Compta (3 diapos) avec les KPI calculés."""
 
 from pathlib import Path
 
@@ -109,18 +106,27 @@ def _fill_slide3(slide, result: dict):
     cur, m1 = d["cur"], d["m1"]
     cb, fd = cur["clients_bloques"], cur["factures_dues"]
 
+    m1_cb, m1_fd = m1.get("clients_bloques"), m1.get("factures_dues")
+
     set_text(find_shape(slide, 94), f"{cb['total']} clients")
     set_text(find_shape(slide, 96), f"Dont {cb['actifs']} actifs en {year}")
     _set_label_and_value(find_shape(slide, 98), f" CA {year}", fr_k(cb["ca"], 1))
     _set_label_and_value(find_shape(slide, 104), None, fr_k(cb["solde"], 1))
-    set_delta_na(find_shape(slide, 107), "Mois-1")
+    if m1_cb:
+        set_delta(find_shape(slide, 107), f"Mois-1 : {m1_cb['total']} clients", e.get("clients_bloques_total_m1"))
+    else:
+        set_delta_na(find_shape(slide, 107), "Mois-1")
 
     set_text(find_shape(slide, 72), f"{fd['nb']} fact")
     set_text(find_shape(slide, 74), fr_k(fd["montant"], 1))
     set_text(find_shape(slide, 78), _pct(fd["part_annee_nb"]))
     set_text(find_shape(slide, 80), _pct(fd["part_annee_montant"]))
-    set_delta_na(find_shape(slide, 89), "Mois-1")
-    set_delta_na(find_shape(slide, 92), "Mois-1")
+    if m1_fd:
+        set_delta(find_shape(slide, 89), f"Mois-1 : {m1_fd['nb']} fact", e.get("factures_dues_nb_m1"), higher_is_bad=True)
+        set_delta(find_shape(slide, 92), f"Mois-1 : {fr_k(m1_fd['montant'], 1)}", e.get("factures_dues_montant_m1"), higher_is_bad=True)
+    else:
+        set_delta_na(find_shape(slide, 89), "Mois-1")
+        set_delta_na(find_shape(slide, 92), "Mois-1")
 
     set_text(find_shape(slide, 15), "Factures impayées (≥ 60 jrs)")
     set_text(find_shape(slide, 39), f"{fd['nb_60']} fact")
@@ -128,8 +134,13 @@ def _fill_slide3(slide, result: dict):
     set_text(find_shape(slide, 35), f"{fd['clients_60']} clients distincts")
     set_text(find_shape(slide, 82), _pct(fd["part_60_nb"]))
     set_text(find_shape(slide, 84), _pct(fd["part_60_montant"]))
-    for shape_id in (65, 68, 61):
-        set_delta_na(find_shape(slide, shape_id), "Mois-1")
+    if m1_fd:
+        set_delta(find_shape(slide, 65), f"Mois-1 : {m1_fd['nb_60']} fact", e.get("factures_dues_60_nb_m1"), higher_is_bad=True)
+        set_delta(find_shape(slide, 68), f"Mois-1 : {fr_k(m1_fd['montant_60'], 1)}", e.get("factures_dues_60_montant_m1"), higher_is_bad=True)
+        set_delta_na(find_shape(slide, 61), "Mois-1")  # pas de clients distincts Mois-1 dans la référence manuelle
+    else:
+        for shape_id in (65, 68, 61):
+            set_delta_na(find_shape(slide, shape_id), "Mois-1")
 
     set_text(find_shape(slide, 24), f"{fr(cur['delais']['livraison_facture'], 1)} jours")
     set_delta(find_shape(slide, 38), f"Mois-1 : {fr(m1['delais']['livraison_facture'], 1)}j",

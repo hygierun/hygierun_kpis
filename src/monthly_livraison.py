@@ -1,7 +1,4 @@
-"""KPI mensuels des sections Livraison et Comptabilité (règles validées avec Antoine, mode TCD).
-
-Les blocs GPS (nb d'arrêts moyen, distance moyenne, tableau par livreur) ne sont pas encore calculés.
-"""
+"""KPI mensuels des sections Livraison et Comptabilité (règles validées avec Antoine, mode TCD)."""
 
 from typing import Dict, List, Optional
 
@@ -26,6 +23,24 @@ IMPAYES_SEUIL_JOURS = 60
 # GPS : plaque -> chauffeur (ordre d'affichage du tableau du template)
 GPS_CHAUFFEURS = ["Nathan", "Patrick", "Alain (cellule)"]
 GPS_PLAQUES = {"HE-451-KX": "Nathan", "GA-850-JB": "Patrick", "GS-993-QR": "Alain (cellule)"}
+
+# Référence manuelle pour les KPI "photo du jour" (clients bloqués, factures dues, GPS) qu'on ne peut pas
+# recalculer depuis l'historique du fichier. À défaut de mieux, ces valeurs viennent du dernier deck PowerPoint
+# produit pour ce mois — jamais des KPI recalculables (délais, camions, enlèvements, multiples), où notre propre
+# calcul sur les données du mois reste la référence fiable et cohérente avec les règles validées.
+MOIS1_MANUEL: Dict[tuple, dict] = {
+    (2026, 7): {
+        "clients_bloques": {"total": 148, "actifs": 73, "ca": 157_000, "solde": None},
+        "factures_dues": {"nb": 416, "montant": 227_985, "nb_60": 83, "montant_60": 39_000, "clients_60": 51},
+        "gps": {
+            "Nathan": {"Nb Arrêts Moy": 8.8, "Distance Moy (kms)": 110, "Nb de jours travail": 21},
+            "Patrick": {"Nb Arrêts Moy": 10.0, "Distance Moy (kms)": 126, "Nb de jours travail": 21},
+            "Alain (cellule)": {"Nb Arrêts Moy": 9.8, "Distance Moy (kms)": 147, "Nb de jours travail": 22},
+            "Moy pond": {"Nb Arrêts Moy": 9.5, "Distance Moy (kms)": 128, "Nb de jours travail": 21.3},
+        },
+    },
+}
+
 
 # Pause déjeuner : arrêt de 11h à 14h d'au moins 30 min, sans plafond de durée (souvent près du dépôt Hygierun).
 # Toute pause de plus d'1h30, à n'importe quelle heure, est aussi exclue (ce n'est pas un arrêt client).
@@ -247,8 +262,26 @@ class LivraisonComptaCalculator:
         data["cur"]["factures_dues"] = self.factures_dues(year, month)
         data["cur"]["gps"] = self.gps_par_chauffeur(year, month)
 
+        manuel = MOIS1_MANUEL.get((py, pm), {})
+        data["m1"]["clients_bloques"] = manuel.get("clients_bloques")
+        data["m1"]["factures_dues"] = manuel.get("factures_dues")
+        data["m1"]["gps"] = pd.DataFrame(manuel["gps"]).T if "gps" in manuel else None
+
         cur = data["cur"]
         evolutions: Dict[str, Optional[float]] = {}
+        m1_cb, m1_fd, m1_gps = data["m1"]["clients_bloques"], data["m1"]["factures_dues"], data["m1"]["gps"]
+        if m1_cb:
+            evolutions["clients_bloques_total_m1"] = evolution(cur["clients_bloques"]["total"], m1_cb["total"])
+            evolutions["clients_bloques_ca_m1"] = evolution(cur["clients_bloques"]["ca"], m1_cb["ca"])
+        if m1_fd:
+            evolutions["factures_dues_nb_m1"] = evolution(cur["factures_dues"]["nb"], m1_fd["nb"])
+            evolutions["factures_dues_montant_m1"] = evolution(cur["factures_dues"]["montant"], m1_fd["montant"])
+            evolutions["factures_dues_60_nb_m1"] = evolution(cur["factures_dues"]["nb_60"], m1_fd["nb_60"])
+            evolutions["factures_dues_60_montant_m1"] = evolution(cur["factures_dues"]["montant_60"], m1_fd["montant_60"])
+        if m1_gps is not None:
+            evolutions["gps_arrets_m1"] = evolution(cur["gps"].loc["Moy pond", "Nb Arrêts Moy"], m1_gps.loc["Moy pond", "Nb Arrêts Moy"])
+            evolutions["gps_distance_m1"] = evolution(cur["gps"].loc["Moy pond", "Distance Moy (kms)"], m1_gps.loc["Moy pond", "Distance Moy (kms)"])
+
         for ref in ("n1", "m1"):
             other = data[ref]
             evolutions[f"ca_livre_{ref}"] = evolution(cur["camions"]["ca_livre"], other["camions"]["ca_livre"])
