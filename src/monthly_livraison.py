@@ -42,11 +42,13 @@ MOIS1_MANUEL: Dict[tuple, dict] = {
 }
 
 
-# Pause déjeuner : arrêt de 11h à 14h d'au moins 30 min, sans plafond de durée (souvent près du dépôt Hygierun).
-# Toute pause de plus d'1h30, à n'importe quelle heure, est aussi exclue (ce n'est pas un arrêt client).
+# Pause déjeuner : arrêt long (11h-14h et >= 30 min, ou > 1h30 à toute heure) à une adresse qui revient
+# souvent dans le mois. La seule durée ne suffit pas : un arrêt client peut aussi durer 30 min à midi.
+# La récurrence (le livreur mange toujours au même endroit, près du dépôt) est un critère plus sûr.
 PAUSE_HEURE_MIN, PAUSE_HEURE_MAX = 11.0, 14.0
 PAUSE_DUREE_MIN = pd.Timedelta(minutes=30)
 PAUSE_DUREE_LONGUE = pd.Timedelta(minutes=90)
+PAUSE_OCCURRENCES_MIN = 3
 
 
 def categorie_tournee(camion, designation) -> str:
@@ -159,8 +161,9 @@ class LivraisonComptaCalculator:
         """Une ligne par (véhicule, date) du mois avec son nombre d'arrêts et sa distance parcourue.
 
         Un arrêt à Hygierun (retour dépôt, ou passage en cours de tournée) n'est jamais compté comme un arrêt.
-        Une pause (11h-14h et >= 30 min, ou n'importe quelle heure si > 1h30) est exclue du nombre d'arrêts
-        mais son kilométrage reste dans la distance totale, comme le trajet retour.
+        Une pause déjeuner (arrêt long à une adresse qui revient souvent dans le mois, cf PAUSE_OCCURRENCES_MIN)
+        est exclue du nombre d'arrêts, mais son kilométrage reste dans la distance totale, comme le trajet
+        retour : un simple arrêt long et isolé reste compté, car ce peut être un vrai client.
         """
         if "GPS_Livr" not in self.dfs:
             return pd.DataFrame(columns=["Véhicule", "Date", "Chauffeur", "Nb arrêts", "Distance (km)"])
@@ -172,10 +175,13 @@ class LivraisonComptaCalculator:
         heure_decimale = heure_arrivee.dt.hour + heure_arrivee.dt.minute / 60
         duree_arret = pd.to_timedelta(df["Arrêt"].astype(str), errors="coerce")
         est_hygierun = df["Carnet arrivée"] == "HYGIERUN"
-        est_pause = ~est_hygierun & (
+        est_arret_long = ~est_hygierun & (
             (heure_decimale.between(PAUSE_HEURE_MIN, PAUSE_HEURE_MAX) & (duree_arret >= PAUSE_DUREE_MIN))
             | (duree_arret > PAUSE_DUREE_LONGUE)
         )
+        adresse = df["Adresse arrivée"].astype(str).str.strip().str.upper()
+        occurrences = adresse[est_arret_long].value_counts()
+        est_pause = est_arret_long & adresse.isin(occurrences[occurrences >= PAUSE_OCCURRENCES_MIN].index)
 
         return (df.assign(**{"Arrêt commercial": ~est_hygierun & ~est_pause})
                   .groupby(["Véhicule", "Date"])
