@@ -15,10 +15,9 @@ from .monthly_loader import month_column, previous_month
 DEVIS_SALARIES = ["DALLEAU Jimmy", "DANVIN Joel"]
 
 DOCS_NULS_SALARIES = ["Laetitia COINTREL", "Aimana ABDEREMANE"]
-DOCS_NULS_TYPES = [
-    "LIVRAISON ET INSTAL", "CONTRAT", "GARANTIE", "MISE A DISPO",
-    "LOCATION", "FULL SERVICE", "PRET MACHINE", "PREPA MACHINES",
-]
+DOCS_NULS_TYPES = ["CONTRAT", "FULL SERVICE", "GARANTIE", "LIVRAISON ET INSTAL", "PREPA MACHINES", "PRET MACHINE", "LOCATION"]
+# Mise à dispo (et l'absence de Type Doc Nul) ne compte en DN que si un des 5 techniciens SAV est le Représentant.
+DOCS_NULS_TYPES_SI_TECH = ["MISE A DISPO"]
 SAV_TECHNICIENS_5 = ["DANVIN Joel", "GRONDIN Daniel", "BAREGE YANN", "BIZEUL Christophe", "ALBANY Nicolas"]
 
 # Main d'œuvre / déplacement : le Représentant force la catégorie quand c'est un technicien connu ;
@@ -69,12 +68,15 @@ class SavCalculator:
     def docs_nuls_rows(self, year: int, month: int) -> pd.DataFrame:
         df = self.dfs["Fact_Arch"]
         mois = self._in_month(df, "Date", year, month)
+        is_tech = df["Représentant"].isin(SAV_TECHNICIENS_5)
 
-        dn = df[mois & df["Salarié"].isin(DOCS_NULS_SALARIES) & (df["PosteEtats"] == "DN")
-                & df["Type Doc Nul"].isin(DOCS_NULS_TYPES)].copy()
+        type_ok = df["Type Doc Nul"].isin(DOCS_NULS_TYPES) | (
+            is_tech & (df["Type Doc Nul"].isin(DOCS_NULS_TYPES_SI_TECH) | df["Type Doc Nul"].isna())
+        )
+        dn = df[mois & df["Salarié"].isin(DOCS_NULS_SALARIES) & (df["PosteEtats"] == "DN") & type_ok].copy()
         dn["Catégorie"] = "DN"
 
-        non_dn = df[mois & df["Représentant"].isin(SAV_TECHNICIENS_5) & df["PosteEtats"].isna()].copy()
+        non_dn = df[mois & is_tech & df["PosteEtats"].isna()].copy()
         non_dn["Catégorie"] = "Non DN"
 
         return pd.concat([dn, non_dn], ignore_index=True)
