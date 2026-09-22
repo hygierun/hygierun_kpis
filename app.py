@@ -505,6 +505,11 @@ def _monthly_section(key: str, section: dict, year: int, month: int):
     uploaded = st.file_uploader(f"Input mensuel {section['name']}", type="xlsx", help=section["input_help"],
                                 key=f"{state_key}_input")
 
+    mois1_pptx = None
+    if "mois1_pptx_help" in section:
+        mois1_pptx = st.file_uploader("PowerPoint Mois-1 (optionnel)", type="pptx", help=section["mois1_pptx_help"],
+                                      key=f"{state_key}_mois1_pptx")
+
     with st.expander("📋 Colonnes obligatoires dans le fichier input", expanded=False):
         st.caption("Ces colonnes doivent exister (avec ces noms exacts) pour que les calculs fonctionnent.")
         for sheet, cols in section["required"](year, month).items():
@@ -519,7 +524,12 @@ def _monthly_section(key: str, section: dict, year: int, month: int):
                     with tempfile.TemporaryDirectory() as tmpdir:
                         input_path = Path(tmpdir) / f"input_{key}.xlsx"
                         input_path.write_bytes(uploaded.getbuffer())
-                        st.session_state[state_key] = section["build"](str(input_path), year, month)
+                        build_kwargs = {}
+                        if mois1_pptx is not None:
+                            mois1_path = Path(tmpdir) / f"mois1_{key}.pptx"
+                            mois1_path.write_bytes(mois1_pptx.getbuffer())
+                            build_kwargs["mois1_pptx_path"] = str(mois1_path)
+                        st.session_state[state_key] = section["build"](str(input_path), year, month, **build_kwargs)
             except Exception as e:
                 st.session_state.pop(state_key, None)
                 st.error(f"❌ Erreur: {e}")

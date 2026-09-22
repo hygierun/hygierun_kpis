@@ -252,7 +252,8 @@ class LivraisonComptaCalculator:
         }
 
     # ------------------------------------------------------------------ Assemblage
-    def compute(self, year: int, month: int) -> Dict[str, dict]:
+    def compute(self, year: int, month: int, mois1_reference: Optional[dict] = None) -> Dict[str, dict]:
+        """mois1_reference : override de MOIS1_MANUEL (ex. lu depuis le deck Mois-1 uploadé), même structure."""
         py, pm = previous_month(year, month)
         periods = {"cur": (year, month), "n1": (year - 1, month), "m1": (py, pm)}
         data = {
@@ -268,7 +269,7 @@ class LivraisonComptaCalculator:
         data["cur"]["factures_dues"] = self.factures_dues(year, month)
         data["cur"]["gps"] = self.gps_par_chauffeur(year, month)
 
-        manuel = MOIS1_MANUEL.get((py, pm), {})
+        manuel = mois1_reference or MOIS1_MANUEL.get((py, pm), {})
         data["m1"]["clients_bloques"] = manuel.get("clients_bloques")
         data["m1"]["factures_dues"] = manuel.get("factures_dues")
         data["m1"]["gps"] = pd.DataFrame(manuel["gps"]).T if "gps" in manuel else None
