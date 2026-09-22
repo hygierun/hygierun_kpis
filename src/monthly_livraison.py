@@ -27,9 +27,11 @@ IMPAYES_SEUIL_JOURS = 60
 GPS_CHAUFFEURS = ["Nathan", "Patrick", "Alain (cellule)"]
 GPS_PLAQUES = {"HE-451-KX": "Nathan", "GA-850-JB": "Patrick", "GS-993-QR": "Alain (cellule)"}
 
-# Pause déjeuner : le plus souvent l'avant-dernier arrêt du jour, entre 11h et 14h, 30 min à 1h15
+# Pause déjeuner : arrêt de 11h à 14h d'au moins 30 min, sans plafond de durée (souvent près du dépôt Hygierun).
+# Toute pause de plus d'1h30, à n'importe quelle heure, est aussi exclue (ce n'est pas un arrêt client).
 PAUSE_HEURE_MIN, PAUSE_HEURE_MAX = 11.0, 14.0
-PAUSE_DUREE_MIN, PAUSE_DUREE_MAX = pd.Timedelta(minutes=30), pd.Timedelta(minutes=75)
+PAUSE_DUREE_MIN = pd.Timedelta(minutes=30)
+PAUSE_DUREE_LONGUE = pd.Timedelta(minutes=90)
 
 
 def categorie_tournee(camion, designation) -> str:
@@ -142,7 +144,7 @@ class LivraisonComptaCalculator:
         """Une ligne par (véhicule, date) du mois avec son nombre d'arrêts et sa distance parcourue.
 
         Un arrêt à Hygierun (retour dépôt, ou passage en cours de tournée) n'est jamais compté comme un arrêt.
-        La pause déjeuner (avant-dernier arrêt du jour, 11h-14h, 30 min à 1h15) est exclue du nombre d'arrêts
+        Une pause (11h-14h et >= 30 min, ou n'importe quelle heure si > 1h30) est exclue du nombre d'arrêts
         mais son kilométrage reste dans la distance totale, comme le trajet retour.
         """
         if "GPS_Livr" not in self.dfs:
@@ -151,30 +153,23 @@ class LivraisonComptaCalculator:
         df = self.dfs["GPS_Livr"].copy()
         df = df[self._in_month(df, "Date", year, month)]
         df["Chauffeur"] = df["Véhicule"].apply(lambda v: next((n for p, n in GPS_PLAQUES.items() if p in str(v)), None))
-        df["Arrivée (h)"] = pd.to_datetime(df["Arrivée"], format="%H:%M:%S", errors="coerce")
-        df["Arrêt (durée)"] = pd.to_timedelta(df["Arrêt"].astype(str), errors="coerce")
+        heure_arrivee = pd.to_datetime(df["Arrivée"], format="%H:%M:%S", errors="coerce")
+        heure_decimale = heure_arrivee.dt.hour + heure_arrivee.dt.minute / 60
+        duree_arret = pd.to_timedelta(df["Arrêt"].astype(str), errors="coerce")
+        est_hygierun = df["Carnet arrivée"] == "HYGIERUN"
+        est_pause = ~est_hygierun & (
+            (heure_decimale.between(PAUSE_HEURE_MIN, PAUSE_HEURE_MAX) & (duree_arret >= PAUSE_DUREE_MIN))
+            | (duree_arret > PAUSE_DUREE_LONGUE)
+        )
 
-        rows = []
-        for (vehicule, date), groupe in df.groupby(["Véhicule", "Date"]):
-            groupe = groupe.sort_values("Arrivée (h)").reset_index(drop=True)
-            est_hygierun = groupe["Carnet arrivée"] == "HYGIERUN"
-
-            pause = False
-            if len(groupe) >= 2 and not est_hygierun.iloc[-2]:
-                avant_dernier = groupe.iloc[-2]
-                heure = avant_dernier["Arrivée (h)"]
-                heure_decimale = heure.hour + heure.minute / 60 if pd.notna(heure) else None
-                duree = avant_dernier["Arrêt (durée)"]
-                if (heure_decimale is not None and PAUSE_HEURE_MIN <= heure_decimale <= PAUSE_HEURE_MAX
-                        and PAUSE_DUREE_MIN <= duree <= PAUSE_DUREE_MAX):
-                    pause = True
-
-            rows.append({
-                "Véhicule": vehicule, "Date": date, "Chauffeur": groupe["Chauffeur"].iloc[0],
-                "Nb arrêts": int((~est_hygierun).sum()) - (1 if pause else 0),
-                "Distance (km)": groupe["Km"].sum(),
-            })
-        return pd.DataFrame(rows)
+        return (df.assign(**{"Arrêt commercial": ~est_hygierun & ~est_pause})
+                  .groupby(["Véhicule", "Date"])
+                  .apply(lambda g: pd.Series({
+                      "Chauffeur": g["Chauffeur"].iloc[0],
+                      "Nb arrêts": int(g["Arrêt commercial"].sum()),
+                      "Distance (km)": g["Km"].sum(),
+                  }))
+                  .reset_index())
 
     def gps_par_chauffeur(self, year: int, month: int) -> Optional[pd.DataFrame]:
         """Nb d'arrêts moyen, distance moyenne et nb de jours travaillés par chauffeur, + une ligne 'Moy pond'."""
