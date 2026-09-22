@@ -42,6 +42,7 @@ LIVRAISON_COMPTA_REQUIRED_COLUMNS: Dict[str, List[str]] = {
     "Cdes_Arch": ["Livraison", "Tournée", "Représentant", "Nb bls"],
     "Fact_Dues": ["Date", "Client (réf.)", "Nb JEch", "Restant dû"],
     "Clients": ["Désignation", "Qualification", "Solde cpta"],
+    "GPS_Livr": ["Véhicule", "Date", "Arrivée", "Carnet arrivée", "Arrêt", "Km"],
 }
 
 DETAIL_COLUMNS: Dict[str, List[str]] = {

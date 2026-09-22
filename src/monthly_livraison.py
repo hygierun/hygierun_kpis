@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 
-from .monthly_commerce import evolution, month_bounds, team_x6
+from .monthly_commerce import evolution, month_bounds
 from .monthly_loader import previous_month
 
 TOURNEE_CAMION_MIN = 2200
@@ -22,6 +22,14 @@ QUALIFICATIONS_BLOQUEES = [
     "Client Public - Bloqué", "ND Cover - Bloqué", "ND Cover refusé - Bloqué", "Sans assurance - Bloqué",
 ]
 IMPAYES_SEUIL_JOURS = 60
+
+# GPS : plaque -> chauffeur (ordre d'affichage du tableau du template)
+GPS_CHAUFFEURS = ["Nathan", "Patrick", "Alain (cellule)"]
+GPS_PLAQUES = {"HE-451-KX": "Nathan", "GA-850-JB": "Patrick", "GS-993-QR": "Alain (cellule)"}
+
+# Pause déjeuner : le plus souvent l'avant-dernier arrêt du jour, entre 11h et 14h, 30 min à 1h15
+PAUSE_HEURE_MIN, PAUSE_HEURE_MAX = 11.0, 14.0
+PAUSE_DUREE_MIN, PAUSE_DUREE_MAX = pd.Timedelta(minutes=30), pd.Timedelta(minutes=75)
 
 
 def categorie_tournee(camion, designation) -> str:
@@ -112,12 +120,11 @@ class LivraisonComptaCalculator:
             "nb": len(rows),
         }
 
-    # ------------------------------------------------------------------ Multiples livraisons (commandes archivées de l'équipe)
+    # ------------------------------------------------------------------ Multiples livraisons (toutes les commandes archivées)
     def multiples_rows(self, year: int, month: int) -> pd.DataFrame:
         df = self.dfs["Cdes_Arch"].copy()
         df["Tournée"] = pd.to_numeric(df["Tournée"], errors="coerce")
-        return df[self._in_month(df, "Livraison", year, month) & df["Représentant"].isin(team_x6(year))
-                  & df["Tournée"].notna() & ~df["Tournée"].isin(TOURNEES_EXCLUES)]
+        return df[self._in_month(df, "Livraison", year, month) & df["Tournée"].notna() & ~df["Tournée"].isin(TOURNEES_EXCLUES)]
 
     def multiples(self, year: int, month: int) -> Dict[str, float]:
         rows = self.multiples_rows(year, month)
@@ -129,6 +136,62 @@ class LivraisonComptaCalculator:
             "total": total, "buckets": buckets,
             "nb_1bl": buckets["1"], "part_1bl": buckets["1"] / total * 100 if total else None,
         }
+
+    # ------------------------------------------------------------------ GPS (nb d'arrêts et distance par tournée = véhicule + jour)
+    def gps_tournees_rows(self, year: int, month: int) -> pd.DataFrame:
+        """Une ligne par (véhicule, date) du mois avec son nombre d'arrêts et sa distance parcourue.
+
+        Un arrêt à Hygierun (retour dépôt, ou passage en cours de tournée) n'est jamais compté comme un arrêt.
+        La pause déjeuner (avant-dernier arrêt du jour, 11h-14h, 30 min à 1h15) est exclue du nombre d'arrêts
+        mais son kilométrage reste dans la distance totale, comme le trajet retour.
+        """
+        if "GPS_Livr" not in self.dfs:
+            return pd.DataFrame(columns=["Véhicule", "Date", "Chauffeur", "Nb arrêts", "Distance (km)"])
+
+        df = self.dfs["GPS_Livr"].copy()
+        df = df[self._in_month(df, "Date", year, month)]
+        df["Chauffeur"] = df["Véhicule"].apply(lambda v: next((n for p, n in GPS_PLAQUES.items() if p in str(v)), None))
+        df["Arrivée (h)"] = pd.to_datetime(df["Arrivée"], format="%H:%M:%S", errors="coerce")
+        df["Arrêt (durée)"] = pd.to_timedelta(df["Arrêt"].astype(str), errors="coerce")
+
+        rows = []
+        for (vehicule, date), groupe in df.groupby(["Véhicule", "Date"]):
+            groupe = groupe.sort_values("Arrivée (h)").reset_index(drop=True)
+            est_hygierun = groupe["Carnet arrivée"] == "HYGIERUN"
+
+            pause = False
+            if len(groupe) >= 2 and not est_hygierun.iloc[-2]:
+                avant_dernier = groupe.iloc[-2]
+                heure = avant_dernier["Arrivée (h)"]
+                heure_decimale = heure.hour + heure.minute / 60 if pd.notna(heure) else None
+                duree = avant_dernier["Arrêt (durée)"]
+                if (heure_decimale is not None and PAUSE_HEURE_MIN <= heure_decimale <= PAUSE_HEURE_MAX
+                        and PAUSE_DUREE_MIN <= duree <= PAUSE_DUREE_MAX):
+                    pause = True
+
+            rows.append({
+                "Véhicule": vehicule, "Date": date, "Chauffeur": groupe["Chauffeur"].iloc[0],
+                "Nb arrêts": int((~est_hygierun).sum()) - (1 if pause else 0),
+                "Distance (km)": groupe["Km"].sum(),
+            })
+        return pd.DataFrame(rows)
+
+    def gps_par_chauffeur(self, year: int, month: int) -> Optional[pd.DataFrame]:
+        """Nb d'arrêts moyen, distance moyenne et nb de jours travaillés par chauffeur, + une ligne 'Moy pond'."""
+        rows = self.gps_tournees_rows(year, month)
+        if rows.empty:
+            return None
+
+        par_chauffeur = rows.groupby("Chauffeur").agg(
+            **{"Nb Arrêts Moy": ("Nb arrêts", "mean"), "Distance Moy (kms)": ("Distance (km)", "mean"),
+               "Nb de jours travail": ("Date", "count")}
+        ).reindex(GPS_CHAUFFEURS)
+
+        pondere = pd.DataFrame([{
+            "Nb Arrêts Moy": rows["Nb arrêts"].mean(), "Distance Moy (kms)": rows["Distance (km)"].mean(),
+            "Nb de jours travail": rows["Date"].nunique(),
+        }], index=["Moy pond"])
+        return pd.concat([par_chauffeur, pondere])
 
     # ------------------------------------------------------------------ Comptabilité (photo du jour de l'export)
     def clients_bloques_rows(self, year: int) -> pd.DataFrame:
@@ -187,6 +250,7 @@ class LivraisonComptaCalculator:
         }
         data["cur"]["clients_bloques"] = self.clients_bloques(year)
         data["cur"]["factures_dues"] = self.factures_dues(year, month)
+        data["cur"]["gps"] = self.gps_par_chauffeur(year, month)
 
         cur = data["cur"]
         evolutions: Dict[str, Optional[float]] = {}

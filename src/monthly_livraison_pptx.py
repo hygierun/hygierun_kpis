@@ -7,6 +7,7 @@ from pathlib import Path
 
 from pptx import Presentation
 
+from .monthly_commerce import evolution
 from .pptx_helpers import (COMMENT_PLACEHOLDER, find_shape, fr, fr_k, set_cell, set_delta, set_delta_na,
                            set_subtitle, set_text)
 
@@ -50,15 +51,34 @@ def _fill_slide1(slide, result: dict):
     set_text(find_shape(slide, 87), str(cam["sous_traitance"]))
     set_text(find_shape(slide, 57), f"Mois-1 : {cam_m1['sous_traitance']}")
 
-    # Blocs GPS : en attente du recalcul
-    for shape_id in (80, 30):
-        set_text(find_shape(slide, shape_id), "n/a")
-    for shape_id in (36, 44):
-        set_delta_na(find_shape(slide, shape_id), "Mois-1")
+    # Blocs GPS
+    gps, gps_m1 = cur.get("gps"), m1.get("gps")
     table = find_shape(slide, 88).table
-    for row in range(1, len(table.rows)):
-        for col in range(1, len(table.columns)):
-            set_cell(table.cell(row, col), "n/a")
+    if gps is None:
+        for shape_id in (80, 30):
+            set_text(find_shape(slide, shape_id), "n/a")
+        for shape_id in (36, 44):
+            set_delta_na(find_shape(slide, shape_id), "Mois-1")
+        for row in range(1, len(table.rows)):
+            for col in range(1, len(table.columns)):
+                set_cell(table.cell(row, col), "n/a")
+    else:
+        pond = gps.loc["Moy pond"]
+        set_text(find_shape(slide, 80), fr(pond["Nb Arrêts Moy"], 1))
+        set_text(find_shape(slide, 30), f"{pond['Distance Moy (kms)']:.0f} kms")
+        if gps_m1 is not None:
+            pond_m1 = gps_m1.loc["Moy pond"]
+            set_delta(find_shape(slide, 36), f"Mois-1 : {fr(pond_m1['Nb Arrêts Moy'], 1)} ", evolution(pond["Nb Arrêts Moy"], pond_m1["Nb Arrêts Moy"]))
+            set_delta(find_shape(slide, 44), f"Mois-1 : {pond_m1['Distance Moy (kms)']:.0f} kms ", evolution(pond["Distance Moy (kms)"], pond_m1["Distance Moy (kms)"]))
+        else:
+            set_delta_na(find_shape(slide, 36), "Mois-1")
+            set_delta_na(find_shape(slide, 44), "Mois-1")
+        for row_idx, chauffeur in enumerate(gps.index, 1):
+            r = gps.loc[chauffeur]
+            set_cell(table.cell(row_idx, 0), chauffeur)
+            set_cell(table.cell(row_idx, 1), fr(r["Nb Arrêts Moy"], 1))
+            set_cell(table.cell(row_idx, 2), f"{r['Distance Moy (kms)']:.0f}")
+            set_cell(table.cell(row_idx, 3), str(int(r["Nb de jours travail"])))
 
     set_text(find_shape(slide, 61), COMMENT_PLACEHOLDER)
 

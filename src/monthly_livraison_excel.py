@@ -38,7 +38,7 @@ def summary_rows(result: dict) -> List[Optional[list]]:
         line("Délai livraison → facturation (jours)", "delais", "livraison_facture", "delai_livraison_facture"),
         line("Nb lignes retenues", "delais", "nb"),
         None,
-        ["Livraison - multiples livraisons (commandes archivées équipe commerciale)"],
+        ["Livraison - multiples livraisons (toutes les commandes archivées)"],
         line("Nb commandes", "multiples", "total"),
         line("Commandes livrées en 1 BL", "multiples", "nb_1bl"),
         line("Part des commandes livrées en 1 BL (%)", "multiples", "part_1bl", "part_1bl"),
@@ -84,6 +84,11 @@ def generate_livraison_excel(calc: LivraisonComptaCalculator, result: dict, outp
                  "Délai souhaité (j)", "Délai cde → livraison (j)", "Délai livraison → facture (j)"]))
     write_frame(wb, "Multiples_livraisons", select_columns(calc.multiples_rows(year, month),
                 ["Livraison", "N°", "Client", "Représentant", "Tournée", "Nb bls"]))
+    gps = calc.gps_tournees_rows(year, month)
+    if not gps.empty:
+        write_frame(wb, "GPS_tournees", gps)
+        write_frame(wb, "GPS_par_chauffeur", calc.gps_par_chauffeur(year, month).reset_index(names="Chauffeur"))
+
     write_frame(wb, "Clients_bloques", select_columns(calc.clients_bloques_rows(year),
                 ["Référence", "Désignation", "Qualification", f"Vtes {year}", "Solde cpta"]))
     write_frame(wb, "Factures_dues", select_columns(calc.factures_dues_rows(year, month),
