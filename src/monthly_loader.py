@@ -45,6 +45,13 @@ LIVRAISON_COMPTA_REQUIRED_COLUMNS: Dict[str, List[str]] = {
     "GPS_Livr": ["Véhicule", "Date", "Arrivée", "Carnet arrivée", "Arrêt", "Km", "Adresse arrivée"],
 }
 
+SAV_ACHAT_REQUIRED_COLUMNS: Dict[str, List[str]] = {
+    "Fact_Arch": ["Date", "Salarié", "Représentant", "PosteEtats", "Type Doc Nul", "Total HT"],
+    "Devis_Arch": ["Date", "Salarié", "Total HT"],
+    "Devis_EnCours": ["Date", "Salarié", "Total HT"],
+    "MO+Depl": ["Article réf", "Représentant"],
+}
+
 DETAIL_COLUMNS: Dict[str, List[str]] = {
     "Cdes_ALivr": ["N°", "Client", "Total HT"],
     "Cdes_Arch": ["N°", "Client"],
@@ -55,6 +62,9 @@ DETAIL_COLUMNS: Dict[str, List[str]] = {
     "Delais Bis": ["N°"],
     "Fact_Dues": ["N°", "Client"],
     "Clients": ["Référence"],
+    "Devis_Arch": ["N°", "Client"],
+    "Devis_EnCours": ["N°", "Client"],
+    "MO+Depl": ["Article"],
 }
 
 DATE_COLUMNS = ["Date", "Livraison", "Liv. souhaitée", "Réception", "Fact date", "Date Creation Cde"]
@@ -79,6 +89,16 @@ def preparation_required_columns(year: int, month: int) -> Dict[str, List[str]]:
     return {sheet: list(cols) for sheet, cols in PREPARATION_REQUIRED_COLUMNS.items()}
 
 
+def sav_achat_required_columns(year: int, month: int) -> Dict[str, List[str]]:
+    """MO+Depl a besoin des colonnes Qté du mois, de N-1 et de Mois-1 (feuille = tout l'historique en colonnes)."""
+    required = {sheet: list(cols) for sheet, cols in SAV_ACHAT_REQUIRED_COLUMNS.items()}
+    py, pm = previous_month(year, month)
+    required["MO+Depl"] += [
+        month_column(year, month, "Qté"), month_column(py, pm, "Qté"), month_column(year - 1, month, "Qté"),
+    ]
+    return required
+
+
 class MonthlyDataLoader:
     """Charge les feuilles d'un Input mensuel et vérifie la présence des colonnes requises."""
 
@@ -95,6 +115,9 @@ class MonthlyDataLoader:
 
     def load_livraison_compta(self, year: int, month: int) -> bool:
         return self._load(livraison_compta_required_columns(year, month))
+
+    def load_sav_achat(self, year: int, month: int) -> bool:
+        return self._load(sav_achat_required_columns(year, month))
 
     def _load(self, required: Dict[str, List[str]]) -> bool:
         self.errors = []

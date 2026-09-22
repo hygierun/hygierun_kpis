@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 from typing import Dict, Optional
 
-from . import monthly_commerce_excel, monthly_livraison_excel, monthly_preparation_excel
+from . import monthly_commerce_excel, monthly_livraison_excel, monthly_preparation_excel, monthly_sav_excel
 from .monthly_commerce import CommerceCalculator
 from .monthly_commerce_excel import generate_commerce_excel
 from .monthly_commerce_pptx import generate_commerce_pptx
@@ -13,15 +13,19 @@ from .monthly_livraison_excel import generate_livraison_excel
 from .monthly_livraison_mois1 import read_mois1_reference
 from .monthly_livraison_pptx import generate_livraison_pptx
 from .monthly_loader import (MonthlyDataLoader, commerce_required_columns, livraison_compta_required_columns,
-                             preparation_required_columns)
+                             preparation_required_columns, sav_achat_required_columns)
 from .monthly_preparation import PreparationCalculator
 from .monthly_preparation_excel import generate_preparation_excel
 from .monthly_preparation_pptx import generate_preparation_pptx
+from .monthly_sav import SavCalculator
+from .monthly_sav_excel import generate_sav_excel
+from .monthly_sav_pptx import generate_sav_pptx
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 COMMERCE_TEMPLATE = TEMPLATES_DIR / "KPI_Commerce.pptx"
 PREPARATION_TEMPLATE = TEMPLATES_DIR / "KPI_Preparation.pptx"
 LIVRAISON_TEMPLATE = TEMPLATES_DIR / "KPI_Livraison_Compta.pptx"
+SAV_TEMPLATE = TEMPLATES_DIR / "KPI_SAV_Achat.pptx"
 
 
 def _build_report(loader_method: str, calculator_cls, excel_module, generate_excel, generate_pptx,
@@ -65,6 +69,11 @@ def build_livraison_report(input_path: str, year: int, month: int, template_path
                          compute_kwargs={"mois1_reference": mois1_reference}, jours_recalage=jours_recalage)
 
 
+def build_sav_report(input_path: str, year: int, month: int, template_path: Path = SAV_TEMPLATE) -> Dict:
+    return _build_report("load_sav_achat", SavCalculator, monthly_sav_excel, generate_sav_excel,
+                         generate_sav_pptx, template_path, input_path, year, month)
+
+
 MONTHLY_SECTIONS = {
     "commerce": {
         "label": "🛒 Commerce", "name": "Commerce",
@@ -83,5 +92,11 @@ MONTHLY_SECTIONS = {
         "mois1_pptx_help": "PowerPoint Livraison & Compta du mois précédent (généré par cette app) : sert à calculer "
                            "les évolutions Mois-1 de Clients bloqués, Factures dues et GPS, qu'on ne peut pas "
                            "recalculer depuis l'historique. Optionnel — sans lui, ces évolutions restent 'n/a'.",
+    },
+    "sav": {
+        "label": "🔧 SAV", "name": "SAV",
+        "input_help": "Input_SAV_Achat.xlsx : feuilles Fact_Arch, Devis_Arch, Devis_EnCours, MO+Depl "
+                      "(Stock_Invent présente mais pas encore utilisée)",
+        "required": sav_achat_required_columns, "build": build_sav_report,
     },
 }
