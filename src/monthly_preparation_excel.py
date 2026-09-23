@@ -32,6 +32,14 @@ def summary_rows(result: dict) -> List[Optional[list]]:
     ]
 
 
+def write_preparation_sheets(wb: Workbook, calc: PreparationCalculator, year: int, month: int):
+    livraisons = select_columns(calc.commandes_preparees_rows(year, month),
+                                ["Catégorie", "Date", "N°", "Tournée", "Client", "Total HT"])
+    write_frame(wb, "Commandes_preparees", livraisons)
+    write_frame(wb, "Conteneurs", select_columns(calc.conteneurs_rows(year, month),
+                ["Container", "Réception", "N°", "Fournisseur", "Total HT", "FFR"]).sort_values(["Container", "Réception"]))
+
+
 def generate_preparation_excel(calc: PreparationCalculator, result: dict, output_path: str) -> str:
     year, month = result["year"], result["month"]
     wb = Workbook()
@@ -39,11 +47,7 @@ def generate_preparation_excel(calc: PreparationCalculator, result: dict, output
     ws.title = "Synthèse"
     write_summary(ws, f"Préparation - {MONTHS_FR[month - 1]} {year}", summary_rows(result))
 
-    livraisons = select_columns(calc.commandes_preparees_rows(year, month),
-                                ["Catégorie", "Date", "N°", "Tournée", "Client", "Total HT"])
-    write_frame(wb, "Commandes_preparees", livraisons)
-    write_frame(wb, "Conteneurs", select_columns(calc.conteneurs_rows(year, month),
-                ["Container", "Réception", "N°", "Fournisseur", "Total HT", "FFR"]).sort_values(["Container", "Réception"]))
+    write_preparation_sheets(wb, calc, year, month)
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     wb.save(output_path)

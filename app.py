@@ -501,9 +501,9 @@ def _summary_dataframe(rows):
 
 
 def _bilan_total_section(year: int, month: int):
-    """Onglet 'Bilan total' : 1 seul fichier Input (19 feuilles fusionnées) -> 1 seul PowerPoint (11
-    diapos). Mois-1 optionnel (deck Bilan Mensuel du mois précédent). Pas encore d'Excel de sortie
-    regroupés (à venir)."""
+    """Onglet 'Bilan total' : 1 seul fichier Input (19 feuilles fusionnées) -> 1 zip (1 PowerPoint de
+    11 diapos + 4 Excel regroupés : Commerce / Préparation+Livraison / Compta+Achats / SAV). Mois-1
+    optionnel (deck Bilan Mensuel du mois précédent)."""
     state_key = "bilan_total"
     st.caption("Génère le Bilan Mensuel complet (Commerce, Préparation, Livraison, Compta, SAV, Achat) "
               "à partir d'un seul fichier Input consolidé.")
@@ -546,13 +546,33 @@ def _bilan_total_section(year: int, month: int):
 
     report = st.session_state.get(state_key)
     if report:
-        st.success("✅ Bilan Mensuel généré (11 diapos)")
+        suffix = f"{MONTHS_FR[month - 1]}{year}"
+        st.success("✅ Bilan Mensuel généré (11 diapos + 4 Excel)")
         st.download_button(
-            "📥 Télécharger le PowerPoint Bilan Mensuel", data=report["pptx"],
-            file_name=f"Bilan_Mensuel_{MONTHS_FR[month - 1]}{year}.pptx",
-            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            use_container_width=True,
+            "📥 Télécharger le zip complet (PowerPoint + 4 Excel)", data=report["zip"],
+            file_name=f"Bilan_Mensuel_{suffix}.zip", mime="application/zip",
+            use_container_width=True, type="primary",
         )
+        with st.expander("Télécharger les fichiers séparément", expanded=False):
+            st.download_button(
+                "📥 PowerPoint Bilan Mensuel", data=report["pptx"],
+                file_name=f"Bilan_Mensuel_{suffix}.pptx",
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                use_container_width=True, key=f"{state_key}_dl_pptx",
+            )
+            excel_labels = {
+                "commerce": ("Commerce", f"Commerce_{suffix}.xlsx"),
+                "preparation_livraison": ("Préparation + Livraison", f"Preparation_Livraison_{suffix}.xlsx"),
+                "compta_achats": ("Compta + Achats", f"Compta_Achats_{suffix}.xlsx"),
+                "sav": ("SAV", f"SAV_{suffix}.xlsx"),
+            }
+            for key, (label, file_name) in excel_labels.items():
+                st.download_button(
+                    f"📥 Excel {label}", data=report["excels"][key], file_name=file_name,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True, key=f"{state_key}_dl_{key}",
+                )
+
         for key, summary in report["summaries"].items():
             with st.expander(f"Résumé — {key.capitalize()}", expanded=False):
                 st.dataframe(_summary_dataframe(summary), use_container_width=True, hide_index=True)

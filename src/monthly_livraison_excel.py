@@ -10,8 +10,8 @@ from .monthly_livraison import LivraisonComptaCalculator
 from .monthly_loader import MONTHS_FR
 
 
-def summary_rows(result: dict) -> List[Optional[list]]:
-    """Lignes de la feuille Synthèse : [libellé, valeur, N-1, évol N-1, Mois-1, évol Mois-1]."""
+def livraison_ops_rows(result: dict) -> List[Optional[list]]:
+    """Lignes Synthèse propres aux opérations de livraison (camions, enlèvements, délais, multiples)."""
     d, e = result["data"], result["evolutions"]
     cur, n1, m1 = d["cur"], d["n1"], d["m1"]
 
@@ -19,7 +19,6 @@ def summary_rows(result: dict) -> List[Optional[list]]:
         return [label, cur[block][field], n1[block][field], e.get(f"{evo_key}_n1") if evo_key else None,
                 m1[block][field], e.get(f"{evo_key}_m1") if evo_key else None]
 
-    cb, fd = cur["clients_bloques"], cur["factures_dues"]
     rows: List[Optional[list]] = [
         ["Livraison - CA livré par camion"],
         line("CA livré par camion (€)", "camions", "ca_livre", "ca_livre"),
@@ -46,8 +45,13 @@ def summary_rows(result: dict) -> List[Optional[list]]:
     for bucket in cur["multiples"]["buckets"]:
         rows.append([f"  commandes avec {bucket} BL", cur["multiples"]["buckets"][bucket],
                      n1["multiples"]["buckets"][bucket], None, m1["multiples"]["buckets"][bucket], None])
-    rows += [
-        None,
+    return rows
+
+
+def compta_rows(result: dict) -> List[Optional[list]]:
+    """Lignes Synthèse propres à la compta (clients bloqués, factures dues) - photo du jour de l'export."""
+    cb, fd = result["data"]["cur"]["clients_bloques"], result["data"]["cur"]["factures_dues"]
+    return [
         ["Compta - clients bloqués (photo du jour de l'export)"],
         ["Clients bloqués", cb["total"], None, None, None, None],
         ["  dont actifs sur l'année (ventes > 0)", cb["actifs"], None, None, None, None],
@@ -65,16 +69,14 @@ def summary_rows(result: dict) -> List[Optional[list]]:
         ["  part du total impayé : nb (%)", fd["part_60_nb"], None, None, None, None],
         ["  part du total impayé : montant (%)", fd["part_60_montant"], None, None, None, None],
     ]
-    return rows
 
 
-def generate_livraison_excel(calc: LivraisonComptaCalculator, result: dict, output_path: str) -> str:
-    year, month = result["year"], result["month"]
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Synthèse"
-    write_summary(ws, f"Livraison et Compta - {MONTHS_FR[month - 1]} {year}", summary_rows(result))
+def summary_rows(result: dict) -> List[Optional[list]]:
+    """Lignes de la feuille Synthèse : [libellé, valeur, N-1, évol N-1, Mois-1, évol Mois-1]."""
+    return livraison_ops_rows(result) + [None] + compta_rows(result)
 
+
+def write_livraison_ops_sheets(wb: Workbook, calc: LivraisonComptaCalculator, year: int, month: int):
     write_frame(wb, "Tournees", select_columns(calc.tournees_rows(year, month),
                 ["Date", "N°", "Désignation", "Chauffeur", "Camion", "Catégorie", "Total HT", "Nb bl A", "Nb fact"]))
     write_frame(wb, "Enlevements_commerciaux", select_columns(calc.enlevements_commerciaux_rows(year, month),
@@ -89,10 +91,23 @@ def generate_livraison_excel(calc: LivraisonComptaCalculator, result: dict, outp
         write_frame(wb, "GPS_tournees", gps)
         write_frame(wb, "GPS_par_chauffeur", calc.gps_par_chauffeur(year, month).reset_index(names="Chauffeur"))
 
+
+def write_compta_sheets(wb: Workbook, calc: LivraisonComptaCalculator, year: int, month: int):
     write_frame(wb, "Clients_bloques", select_columns(calc.clients_bloques_rows(year),
                 ["Référence", "Désignation", "Qualification", f"Vtes {year}", "Solde cpta"]))
     write_frame(wb, "Factures_dues", select_columns(calc.factures_dues_rows(year, month),
                 ["N°", "Date", "Client", "Client (réf.)", "Echéance", "Nb JEch", "Nb JEch retenu", "Restant dû", "> 60 j"]))
+
+
+def generate_livraison_excel(calc: LivraisonComptaCalculator, result: dict, output_path: str) -> str:
+    year, month = result["year"], result["month"]
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Synthèse"
+    write_summary(ws, f"Livraison et Compta - {MONTHS_FR[month - 1]} {year}", summary_rows(result))
+
+    write_livraison_ops_sheets(wb, calc, year, month)
+    write_compta_sheets(wb, calc, year, month)
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     wb.save(output_path)
