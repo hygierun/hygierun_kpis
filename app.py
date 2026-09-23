@@ -561,7 +561,9 @@ def _bilan_total_section(year: int, month: int):
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True, key=f"{state_key}_dl_template",
             help="19 feuilles avec les colonnes obligatoires déjà en en-tête (adaptées au mois/année "
-                 "sélectionnés ci-dessus) — à remplir en collant les exports ERP correspondants.",
+                 "sélectionnés ci-dessus) — à remplir en collant les exports ERP correspondants. "
+                 "Colle chaque export AVEC sa ligne d'en-têtes à partir de A1, en remplaçant la ligne "
+                 "d'en-têtes du template : une seule ligne d'en-têtes par feuille.",
         )
     with col_fiches:
         if FICHES_SAV_ZIP.exists():

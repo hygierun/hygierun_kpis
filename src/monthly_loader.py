@@ -1,5 +1,6 @@
 """Chargement et validation des fichiers input du Bilan Mensuel (section par section)."""
 
+import re
 import warnings
 from datetime import datetime
 from pathlib import Path
@@ -77,6 +78,61 @@ DETAIL_COLUMNS: Dict[str, List[str]] = {
 }
 
 DATE_COLUMNS = ["Date", "Livraison", "Liv. souhaitée", "Réception", "Fact date", "Date Creation Cde"]
+
+# Colonnes toujours numériques (sommées / comparées à 0 par les calculators). Les colonnes dynamiques
+# "Vtes <année>" et "MM/YY HT|Qté" sont reconnues par leur motif dans _is_numeric_column.
+NUMERIC_COLUMNS = {
+    "Total HT", "A livrer Net", "Km", "Restant dû", "Nb JEch", "Nb bls", "Nb bl A", "Nb fact",
+    "Solde cpta", "Dispo", "Nb jours Absences", "Nb interventions", "Nb heures en intervention",
+}
+NUMERIC_COLUMN_PATTERN = re.compile(r"^(Vtes \d{4}|\d{2}/\d{2} (HT|Qté))$")
+
+# Au-delà de cette part de valeurs non numériques, on considère la colonne mal alignée (et non plus
+# quelques cellules isolées à ignorer).
+MAX_NON_NUMERIC_SHARE = 0.2
+HEADER_SCAN_ROWS = 5
+
+
+def _is_numeric_column(name) -> bool:
+    return isinstance(name, str) and (name in NUMERIC_COLUMNS or bool(NUMERIC_COLUMN_PATTERN.match(name)))
+
+
+def _coerce_numeric_columns(df: pd.DataFrame, sheet: str, errors: List[str]) -> pd.DataFrame:
+    """Force en numérique les colonnes censées l'être. Quelques cellules isolées non numériques
+    deviennent NaN (comme les autres valeurs invalides déjà tolérées) ; si une part importante de la
+    colonne est du texte, c'est presque toujours un problème de collage (données décalées d'une
+    colonne, ligne d'en-têtes collée deux fois...) : on le signale clairement plutôt que de calculer
+    silencieusement des totaux faux ou de planter plus loin sur str / float."""
+    for col in df.columns:
+        if not _is_numeric_column(col) or pd.api.types.is_numeric_dtype(df[col]):
+            continue
+        original = df[col]
+        coerced = pd.to_numeric(original, errors="coerce")
+        filled = original.notna()
+        bad = filled & coerced.isna()
+        if filled.sum() and bad.sum() / filled.sum() > MAX_NON_NUMERIC_SHARE:
+            exemples = ", ".join(repr(v) for v in original[bad].head(3).tolist())
+            errors.append(
+                f"Feuille '{sheet}' : la colonne '{col}' contient du texte au lieu de nombres "
+                f"(ex. {exemples}) - les données semblent décalées ou mal collées. Colle l'export "
+                f"avec sa ligne d'en-têtes à partir de A1 (en remplaçant la ligne d'en-têtes du template)."
+            )
+        df[col] = coerced
+    return df
+
+
+def _header_rows(xl: pd.ExcelFile, sheet: str, required: List[str]) -> List[int]:
+    """Numéros Excel (1 = première ligne) des premières lignes qui contiennent toutes les colonnes
+    obligatoires. Il ne doit y en avoir qu'une : un export ERP collé *sous* la ligne d'en-têtes du
+    template en laisse deux (une ligne de données ne contient jamais tous les noms de colonnes)."""
+    head = xl.parse(sheet, header=None, nrows=HEADER_SCAN_ROWS)
+    wanted = set(required)
+    rows = []
+    for i in range(len(head)):
+        values = {str(v).strip() for v in head.iloc[i].tolist() if pd.notna(v)}
+        if wanted <= values:
+            rows.append(i + 1)
+    return rows
 
 
 def _coerce_mixed_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -188,6 +244,15 @@ class MonthlyDataLoader:
                 return False
 
             for sheet, cols in required.items():
+                header_rows = _header_rows(xl, sheet, cols)
+                if len(header_rows) > 1:
+                    lignes = " et ".join(str(r) for r in header_rows)
+                    self.errors.append(
+                        f"Feuille '{sheet}' : plusieurs lignes d'en-têtes détectées (lignes {lignes}). "
+                        f"Il ne doit y en avoir qu'une seule : supprime la ligne d'en-têtes du template et "
+                        f"colle l'export (avec sa ligne d'en-têtes) à partir de A1."
+                    )
+                    continue
                 if sheet in FULL_SHEETS:
                     df = xl.parse(sheet)
                 else:
@@ -200,6 +265,7 @@ class MonthlyDataLoader:
                 for col in DATE_COLUMNS:
                     if col in df.columns:
                         df[col] = pd.to_datetime(df[col], errors="coerce")
-                self.dfs[sheet] = _coerce_mixed_numeric_columns(df)
+                df = _coerce_mixed_numeric_columns(df)
+                self.dfs[sheet] = _coerce_numeric_columns(df, sheet, self.errors)
 
         return not self.errors
