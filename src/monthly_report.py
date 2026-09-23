@@ -88,12 +88,12 @@ MONTHLY_SECTIONS = {
     },
     "preparation": {
         "label": "📦 Préparation", "name": "Préparation",
-        "input_help": "Input_Mensuel_Preparation.xlsx : feuilles Livr_Arch, Ach_Recep",
+        "input_help": "Input_Mensuel_Preparation.xlsx : feuilles Livr_Arch, Ach_Rcp_Arch",
         "required": preparation_required_columns, "build": build_preparation_report,
     },
     "livraison": {
         "label": "🚚 Livraison & Compta", "name": "Livraison et Compta",
-        "input_help": "Input_Livraison_Compta.xlsx : feuilles Tournees, Livr_Arch, Delais Bis, Cdes_Arch, Fact_Dues, Clients, GPS_Livr",
+        "input_help": "Input_Livraison_Compta.xlsx : feuilles Tournees_Arch, Livr_Arch, Delais Bis, Cdes_Arch, Fact_Dues, Clients, GPS_Livr",
         "required": livraison_compta_required_columns, "build": build_livraison_report,
         "mois1_pptx_help": "PowerPoint Livraison & Compta du mois précédent (généré par cette app) : sert à calculer "
                            "les évolutions Mois-1 de Clients bloqués, Factures dues et GPS, qu'on ne peut pas "

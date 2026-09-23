@@ -32,11 +32,11 @@ COMMERCE_REQUIRED_COLUMNS: Dict[str, List[str]] = {
 
 PREPARATION_REQUIRED_COLUMNS: Dict[str, List[str]] = {
     "Livr_Arch": ["Date", "Tournée", "Client", "Total HT"],
-    "Ach_Recep": ["Fournisseur", "Total HT", "FFR", "Container", "Réception"],
+    "Ach_Rcp_Arch": ["Fournisseur", "Total HT", "FFR", "Container", "Réception"],
 }
 
 LIVRAISON_COMPTA_REQUIRED_COLUMNS: Dict[str, List[str]] = {
-    "Tournees": ["Date", "Désignation", "Camion", "Total HT", "Nb bl A", "Nb fact"],
+    "Tournees_Arch": ["Date", "Désignation", "Camion", "Total HT", "Nb bl A", "Nb fact"],
     "Livr_Arch": ["Date", "Tournée", "Transporteur", "Total HT"],
     "Delais Bis": ["Date", "Liv. souhaitée", "Tournée", "Date Creation Cde", "Fact date"],
     "Cdes_Arch": ["Livraison", "Tournée", "Représentant", "Nb bls"],
@@ -64,8 +64,8 @@ DETAIL_COLUMNS: Dict[str, List[str]] = {
     "Cdes_Arch": ["N°", "Client"],
     "Fact_Arch": ["N°", "Client"],
     "Livr_Arch": ["N°", "Client", "Représentant"],
-    "Ach_Recep": ["N°", "Date"],
-    "Tournees": ["N°", "Chauffeur"],
+    "Ach_Rcp_Arch": ["N°", "Date"],
+    "Tournees_Arch": ["N°", "Chauffeur"],
     "Delais Bis": ["N°"],
     "Fact_Dues": ["N°", "Client"],
     "Clients": ["Référence"],

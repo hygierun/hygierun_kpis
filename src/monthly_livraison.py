@@ -80,7 +80,7 @@ class LivraisonComptaCalculator:
 
     # ------------------------------------------------------------------ Tournées (camions)
     def tournees_rows(self, year: int, month: int) -> pd.DataFrame:
-        df = self.dfs["Tournees"]
+        df = self.dfs["Tournees_Arch"]
         rows = df[self._in_month(df, "Date", year, month)].copy()
         rows["Catégorie"] = [categorie_tournee(c, d) for c, d in zip(rows["Camion"], rows["Désignation"])]
         return rows

@@ -17,6 +17,8 @@ from src.monthly_loader import MONTHS_FR, bilan_total_required_columns
 from src.monthly_report import MONTHLY_SECTIONS
 from src.monthly_bilan import build_bilan_report
 from src.monthly_bilan_template import generate_bilan_template_excel
+
+FICHES_SAV_ZIP = Path(__file__).resolve().parent / "assets" / "Input_Fiches_SAV.zip"
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
@@ -508,15 +510,28 @@ def _bilan_total_section(year: int, month: int):
     state_key = "bilan_total"
     st.caption("Génère le Bilan Mensuel complet (Commerce, Préparation, Livraison, Compta, SAV, Achat) "
               "à partir d'un seul fichier Input consolidé.")
-    st.download_button(
-        "📄 Télécharger le template Input vierge",
-        data=generate_bilan_template_excel(year, month),
-        file_name="Input_Mensuel_Template.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True, key=f"{state_key}_dl_template",
-        help="19 feuilles avec les colonnes obligatoires déjà en en-tête (adaptées au mois/année "
-             "sélectionnés ci-dessus) — à remplir en collant les exports ERP correspondants.",
-    )
+    col_template, col_fiches = st.columns(2, gap="medium")
+    with col_template:
+        st.download_button(
+            "📄 Télécharger le template Input vierge",
+            data=generate_bilan_template_excel(year, month),
+            file_name="Input_Mensuel_Template.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True, key=f"{state_key}_dl_template",
+            help="19 feuilles avec les colonnes obligatoires déjà en en-tête (adaptées au mois/année "
+                 "sélectionnés ci-dessus) — à remplir en collant les exports ERP correspondants.",
+        )
+    with col_fiches:
+        if FICHES_SAV_ZIP.exists():
+            st.download_button(
+                "📎 Télécharger le kit fiches SAV (prompt + signatures)",
+                data=FICHES_SAV_ZIP.read_bytes(),
+                file_name="Input_Fiches_SAV.zip", mime="application/zip",
+                use_container_width=True, key=f"{state_key}_dl_fiches",
+                help="Prompt à donner à Claude chaque mois + les 3 images de signatures de référence, "
+                     "pour produire la feuille Bilan_Fiches (Nombre d'interventions SAV) à partir "
+                     "des fiches papier scannées.",
+            )
     uploaded = st.file_uploader("Input Mensuel (toutes sections)", type="xlsx", key=f"{state_key}_input",
                                 help="19 feuilles : les feuilles partagées entre sections (Cdes_Arch, "
                                      "Fact_Arch, Livr_Arch) ne doivent apparaître qu'une seule fois, "

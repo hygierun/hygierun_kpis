@@ -77,7 +77,7 @@ class PreparationCalculator:
 
     # ------------------------------------------------------------------ Dépotage conteneurs (réceptions d'achats)
     def conteneurs_rows(self, year: int, month: int) -> pd.DataFrame:
-        df = self.dfs["Ach_Recep"]
+        df = self.dfs["Ach_Rcp_Arch"]
         start, end = month_bounds(year, month)
         autoliquidation = df["Fournisseur"].astype(str).str.upper().str.contains(MOT_CLE_AUTOLIQUIDATION, na=False)
         return df[(df["Réception"] >= start) & (df["Réception"] <= end)
