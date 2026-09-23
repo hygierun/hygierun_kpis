@@ -24,6 +24,21 @@ class WeeklyDataLoader:
         "Creances",
     ]
 
+    # Colonnes réellement utilisées par KPICalculator pour chaque feuille - source de vérité pour le
+    # template Input téléchargeable et l'aide affichée dans l'appli (pas de validation stricte ici,
+    # WeeklyDataLoader ne vérifie que la présence des feuilles, pas des colonnes).
+    REQUIRED_COLUMNS: Dict[str, list] = {
+        "Commandes_ALivrer": ["Date", "Représentant", "Total HT", "Livraison", "Total TTC"],
+        "Commandes_entournées": ["Date", "Représentant", "Total HT"],
+        "Commandes_Arch": ["Date", "Représentant", "Total HT"],
+        "Fact_Integrer": ["Date", "Représentant", "Total HT"],
+        "Fact_Arch": ["Date", "Représentant", "Total HT"],
+        "Livr_AFact": ["Date", "Tournée", "Représentant", "Total HT"],
+        "Livr_Arch": ["Date", "Tournée", "Représentant", "Total HT"],
+        "Expl_Loc_Delais": ["Date", "Date Creation Cde", "Liv. souhaitée", "Tournée"],
+        "Creances": ["Nb JEch", "Restant dû"],
+    }
+
     def __init__(self, file_path: str):
         """
         Initialise le loader

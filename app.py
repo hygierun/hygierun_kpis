@@ -20,6 +20,8 @@ from src.monthly_bilan import build_bilan_report
 from src.monthly_bilan_template import generate_bilan_template_excel
 
 FICHES_SAV_ZIP = Path(__file__).resolve().parent / "assets" / "Input_Fiches_SAV.zip"
+WEEKLY_INPUT_TEMPLATE = Path(__file__).resolve().parent / "assets" / "Input_Template_Hebdo.xlsx"
+WEEKLY_SNAPSHOT_TEMPLATE = Path(__file__).resolve().parent / "assets" / "Input_Output_Template_Snapshot_Hebdo.xlsx"
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
@@ -56,6 +58,35 @@ st.divider()
 
 def run_weekly_report():
     """Onglet Rapport Hebdomadaire (code existant, inchangé fonctionnellement)"""
+
+    col_tpl1, col_tpl2 = st.columns(2, gap="medium")
+    with col_tpl1:
+        if WEEKLY_INPUT_TEMPLATE.exists():
+            st.download_button(
+                "📄 Télécharger le template Input vierge", data=WEEKLY_INPUT_TEMPLATE.read_bytes(),
+                file_name="Input_Template_Hebdo.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True, key="weekly_dl_template",
+                help="9 feuilles avec les colonnes obligatoires déjà en en-tête — à remplir en collant "
+                     "les exports ERP correspondants.",
+            )
+    with col_tpl2:
+        if WEEKLY_SNAPSHOT_TEMPLATE.exists():
+            st.download_button(
+                "📄 Télécharger le template Snapshot vierge", data=WEEKLY_SNAPSHOT_TEMPLATE.read_bytes(),
+                file_name="Input_Output_Template_Snapshot_Hebdo.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True, key="weekly_dl_snapshot",
+                help="Fichier de suivi hebdomadaire vierge (une ligne par semaine) — à utiliser comme "
+                     "point de départ si tu n'as pas encore de fichier snapshot en cours.",
+            )
+
+    with st.expander("📋 Colonnes obligatoires dans le fichier de données brutes", expanded=False):
+        st.caption("Ces colonnes doivent exister (avec ces noms exacts) pour que les calculs fonctionnent.")
+        for sheet, cols in WeeklyDataLoader.REQUIRED_COLUMNS.items():
+            st.markdown(f"**{sheet}** : " + ", ".join(f"`{c}`" for c in cols))
+
+    st.divider()
 
     # Colonnes pour meilleure présentation
     col1, col2 = st.columns([1, 1], gap="medium")
