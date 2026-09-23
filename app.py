@@ -506,6 +506,14 @@ def _summary_dataframe(rows):
     return pd.DataFrame(records)
 
 
+def _gps_warning(livraison_result: dict, year: int, month: int):
+    """Signale si la section Livraison n'a aucune donnée GPS pour le mois analysé (les blocs GPS
+    restent 'n/a' sans planter, mais autant prévenir plutôt que laisser passer silencieusement)."""
+    if livraison_result["data"]["cur"].get("gps") is None:
+        st.warning(f"⚠️ Aucune donnée GPS trouvée dans `GPS_Livr` pour {MONTHS_FR[month - 1]} {year} — "
+                  "les blocs GPS resteront à 'n/a'. Vérifie que la feuille contient bien l'export de ce mois.")
+
+
 def _bilan_total_section(year: int, month: int):
     """Onglet 'Bilan total' : 1 seul fichier Input (19 feuilles fusionnées) -> 1 zip (1 PowerPoint de
     11 diapos + 4 Excel regroupés : Commerce / Préparation+Livraison / Compta+Achats / SAV). Mois-1
@@ -578,6 +586,7 @@ def _bilan_total_section(year: int, month: int):
     if report:
         suffix = f"{MONTHS_FR[month - 1]}{year}"
         st.success("✅ Bilan Mensuel généré (11 diapos + 4 Excel)")
+        _gps_warning(report["results"]["livraison"], year, month)
         st.download_button(
             "📥 Télécharger le zip complet (PowerPoint + 4 Excel)", data=report["zip"],
             file_name=f"Bilan_Mensuel_{suffix}.zip", mime="application/zip",
@@ -650,6 +659,8 @@ def _monthly_section(key: str, section: dict, year: int, month: int):
         result = report["result"]
         period = f"{MONTHS_FR[result['month'] - 1]} {result['year']}"
         st.success(f"✅ Section {section['name']} générée pour {period}")
+        if key == "livraison":
+            _gps_warning(result, result["year"], result["month"])
 
         st.dataframe(_summary_dataframe(report["summary"]), hide_index=True, use_container_width=True, height=min(600, 40 + 35 * len(report["summary"])))
 
