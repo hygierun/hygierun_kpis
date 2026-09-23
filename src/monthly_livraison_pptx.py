@@ -30,7 +30,7 @@ def _fill_slide1(slide, result: dict):
 
     set_text(find_shape(slide, 9), fr_k(cam["ca_livre"]))
     set_delta(find_shape(slide, 11), f"N-1 : {fr_k(cam1['ca_livre'])}", e["ca_livre_n1"])
-    set_text(find_shape(slide, 28), f"{cam['part_ca_livre']:.0f}% du CA livré")
+    set_text(find_shape(slide, 28), f"{fr(cam['part_ca_livre'])}% du CA livré")
 
     set_text(find_shape(slide, 22), f"{fr(cam['bla_moy'], 1)} BLA")
     set_delta(find_shape(slide, 24), f"N-1 : {fr(cam1['bla_moy'], 1)} BLA", e["bla_n1"])
@@ -89,8 +89,8 @@ def _fill_slide2(slide, result: dict):
               e["delai_cde_livraison_m1"], higher_is_bad=True)
 
     multi, multi_m1 = cur["multiples"], m1["multiples"]
-    set_text(find_shape(slide, 66), f"         {multi['part_1bl']:.0f} %")
-    set_delta(find_shape(slide, 48), f"Mois-1 : {multi_m1['part_1bl']:.0f}%", e["part_1bl_m1"])
+    set_text(find_shape(slide, 66), f"         {fr(multi['part_1bl'])} %")
+    set_delta(find_shape(slide, 48), f"Mois-1 : {fr(multi_m1['part_1bl'])}%", e["part_1bl_m1"])
 
     table = find_shape(slide, 54).table
     for row_idx, bucket in enumerate(MULTI_BL_TABLE_ROWS, 1):

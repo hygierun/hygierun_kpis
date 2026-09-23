@@ -12,11 +12,17 @@ GREY = RGBColor(138, 155, 163)
 COMMENT_PLACEHOLDER = "Commentaire du mois : à compléter"
 
 
-def fr(value: float, decimals: int = 0) -> str:
+def fr(value: Optional[float], decimals: int = 0) -> str:
+    """N-1/Mois-1 peuvent être None quand la période de référence n'a aucune donnée (ex. pas de
+    tournées ce mois-là l'année dernière) - on l'affiche alors comme les autres évolutions absentes."""
+    if value is None:
+        return "n/a"
     return f"{value:.{decimals}f}".replace(".", ",")
 
 
-def fr_k(value: float, decimals: int = 0) -> str:
+def fr_k(value: Optional[float], decimals: int = 0) -> str:
+    if value is None:
+        return "n/a"
     return f"{fr(value / 1000, decimals)} k€"
 
 

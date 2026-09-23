@@ -107,10 +107,10 @@ def _fill_slide2(slide, result: dict):
         ids = seuil_shapes[seuil]
         s = cur["seuils"]
         set_text(find_shape(slide, ids["value"]), f"         {s[f'nb_{seuil}']}")
-        set_paragraph(find_shape(slide, ids["share"]).text_frame.paragraphs[0], f"{s[f'part_{seuil}']:.0f}% cdes clients")
+        set_paragraph(find_shape(slide, ids["share"]).text_frame.paragraphs[0], f"{fr(s[f'part_{seuil}'])}% cdes clients")
         for key, label in (("n1", "N-1"), ("m1", "Mois-1")):
             ref = d[key]["seuils"]
-            set_delta(find_shape(slide, ids[key]), f"{label} : {ref[f'nb_{seuil}']} = {ref[f'part_{seuil}']:.0f}%",
+            set_delta(find_shape(slide, ids[key]), f"{label} : {ref[f'nb_{seuil}']} = {fr(ref[f'part_{seuil}'])}%",
                       e[f"seuil_{seuil}_{key}"])
 
 
