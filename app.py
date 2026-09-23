@@ -502,7 +502,8 @@ def _summary_dataframe(rows):
 
 def _bilan_total_section(year: int, month: int):
     """Onglet 'Bilan total' : 1 seul fichier Input (19 feuilles fusionnées) -> 1 seul PowerPoint (11
-    diapos). Première étape de validation : pas encore de Mois-1 ni d'Excel de sortie regroupés."""
+    diapos). Mois-1 optionnel (deck Bilan Mensuel du mois précédent). Pas encore d'Excel de sortie
+    regroupés (à venir)."""
     state_key = "bilan_total"
     st.caption("Génère le Bilan Mensuel complet (Commerce, Préparation, Livraison, Compta, SAV, Achat) "
               "à partir d'un seul fichier Input consolidé.")
@@ -510,6 +511,12 @@ def _bilan_total_section(year: int, month: int):
                                 help="19 feuilles : les feuilles partagées entre sections (Cdes_Arch, "
                                      "Fact_Arch, Livr_Arch) ne doivent apparaître qu'une seule fois, "
                                      "avec toutes les colonnes nécessaires à chaque section.")
+    mois1_pptx = st.file_uploader("PowerPoint Bilan Mensuel du mois précédent (optionnel)", type="pptx",
+                                  key=f"{state_key}_mois1_pptx",
+                                  help="Pour les évolutions Mois-1 non recalculables depuis l'historique "
+                                       "(clients bloqués, factures dues, GPS, nombre d'interventions, "
+                                       "productivité, valorisation du stock, articles à épuisement). "
+                                       "Optionnel — sans lui, ces évolutions restent 'n/a'.")
 
     with st.expander("📋 Colonnes obligatoires dans le fichier input", expanded=False):
         st.caption("Ces colonnes doivent exister (avec ces noms exacts) pour que les calculs fonctionnent.")
@@ -525,7 +532,14 @@ def _bilan_total_section(year: int, month: int):
                     with tempfile.TemporaryDirectory() as tmpdir:
                         input_path = Path(tmpdir) / "input_bilan.xlsx"
                         input_path.write_bytes(uploaded.getbuffer())
-                        st.session_state[state_key] = build_bilan_report(str(input_path), year, month)
+                        mois1_path = None
+                        if mois1_pptx is not None:
+                            mois1_path = Path(tmpdir) / "mois1_bilan.pptx"
+                            mois1_path.write_bytes(mois1_pptx.getbuffer())
+                        st.session_state[state_key] = build_bilan_report(
+                            str(input_path), year, month,
+                            mois1_pptx_path=str(mois1_path) if mois1_path else None,
+                        )
             except Exception as e:
                 st.session_state.pop(state_key, None)
                 st.error(f"❌ Erreur: {e}")

@@ -33,9 +33,13 @@ def _parse_k_euros(text: str) -> Optional[float]:
 
 
 def read_sav_mois1_reference(pptx_path: str) -> Dict[str, dict]:
+    """Lit le deck SAV/Achat autonome (2 diapos : SAV puis Achat/Appro)."""
     prs = Presentation(pptx_path)
-    slide_sav, slide_achat = prs.slides[0], prs.slides[1]
+    return _read_from_slides(prs.slides[0], prs.slides[1])
 
+
+def _read_from_slides(slide_sav, slide_achat) -> Dict[str, dict]:
+    """Cœur de la lecture, indépendant de la position des diapos dans le fichier."""
     nb_interventions = {
         champ: _parse_int(find_shape(slide_sav, shape_id).text_frame.text)
         for champ, shape_id in NB_INTERVENTIONS_SHAPES.items()

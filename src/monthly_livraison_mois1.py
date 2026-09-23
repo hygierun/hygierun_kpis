@@ -49,13 +49,21 @@ def _montant_k(text: Optional[str]) -> Optional[float]:
 
 
 def read_mois1_reference(pptx_path: str) -> dict:
-    """Retourne un dict partiel {'clients_bloques': {...}, 'factures_dues': {...}, 'gps': {...}}."""
-    reference: dict = {}
+    """Retourne un dict partiel {'clients_bloques': {...}, 'factures_dues': {...}, 'gps': {...}}, à
+    partir du deck Livraison & Compta autonome (3 diapos, GPS en diapo 1, Compta en diapo 3)."""
     try:
         prs = Presentation(pptx_path)
         slide1, _slide2, slide3 = prs.slides
     except Exception:
-        return reference
+        return {}
+    return _read_from_slides(slide1, slide3)
+
+
+def _read_from_slides(slide_gps, slide_compta) -> dict:
+    """Cœur de la lecture, indépendant de la position des diapos dans le fichier : slide_gps porte le
+    tableau GPS (shape 88), slide_compta les blocs Clients bloqués / Factures dues."""
+    reference: dict = {}
+    slide1, slide3 = slide_gps, slide_compta
 
     total = _nombre(_text(slide3, 94))
     ca = _montant_k(_text(slide3, 98))

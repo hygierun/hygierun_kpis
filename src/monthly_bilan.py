@@ -3,18 +3,17 @@
 Réutilise tel quel le chargement (MonthlyDataLoader.load_bilan_total) et les 4 calculators de section
 existants - ce module ne fait qu'assembler, aucune règle de calcul n'est dupliquée ou modifiée.
 
-Mois-1 : pas encore câblé pour cette version consolidée (les lecteurs read_mois1_reference /
-read_sav_mois1_reference supposent des index de diapo différents de ceux du deck fusionné) - à faire
-dans une prochaine passe. En attendant, les évolutions Mois-1 qui en dépendent (clients bloqués,
-factures dues, GPS, nombre d'interventions, productivité, valorisation du stock, articles à
-épuisement) restent 'n/a', sans crash.
+Mois-1 : lu depuis le PowerPoint Bilan Mensuel consolidé du mois précédent (optionnel). Sans lui, les
+évolutions Mois-1 qui en dépendent (clients bloqués, factures dues, GPS, nombre d'interventions,
+productivité, valorisation du stock, articles à épuisement) restent 'n/a', sans crash.
 """
 
 import tempfile
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 from . import monthly_commerce_excel, monthly_livraison_excel, monthly_preparation_excel, monthly_sav_excel
+from .monthly_bilan_mois1 import read_bilan_mois1_reference
 from .monthly_bilan_pptx import generate_bilan_pptx
 from .monthly_commerce import CommerceCalculator
 from .monthly_livraison import LivraisonComptaCalculator
@@ -26,16 +25,19 @@ TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 BILAN_TEMPLATE = TEMPLATES_DIR / "KPI_Mensuel.pptx"
 
 
-def build_bilan_report(input_path: str, year: int, month: int, template_path: Path = BILAN_TEMPLATE) -> Dict:
+def build_bilan_report(input_path: str, year: int, month: int, template_path: Path = BILAN_TEMPLATE,
+                       mois1_pptx_path: Optional[str] = None) -> Dict:
     loader = MonthlyDataLoader(input_path)
     if not loader.load_bilan_total(year, month):
         raise ValueError("\n".join(loader.errors))
 
+    mois1 = read_bilan_mois1_reference(mois1_pptx_path) if mois1_pptx_path else {"livraison": None, "sav": None}
+
     results = {
         "commerce": CommerceCalculator(loader.dfs).compute(year, month),
         "preparation": PreparationCalculator(loader.dfs).compute(year, month),
-        "livraison": LivraisonComptaCalculator(loader.dfs).compute(year, month),
-        "sav": SavCalculator(loader.dfs).compute(year, month),
+        "livraison": LivraisonComptaCalculator(loader.dfs).compute(year, month, mois1_reference=mois1["livraison"]),
+        "sav": SavCalculator(loader.dfs).compute(year, month, mois1_reference=mois1["sav"]),
     }
 
     summaries = {
