@@ -187,9 +187,12 @@ class SavCalculator:
         }
 
     # ------------------------------------------------------------------ Articles à épuisement (Achat/Appro)
-    def articles_epuisement(self, year: int, month: int) -> Dict[str, Optional[float]]:
+    def articles_epuisement_rows(self, year: int, month: int) -> pd.DataFrame:
         df = self.dfs["Ach_Arti"]
-        epuis = df[df["Réappro"] == ARTICLES_EPUISEMENT_REAPPRO]
+        return df[df["Réappro"] == ARTICLES_EPUISEMENT_REAPPRO]
+
+    def articles_epuisement(self, year: int, month: int) -> Dict[str, Optional[float]]:
+        epuis = self.articles_epuisement_rows(year, month)
         total = len(epuis)
         col_ventes = f"Vtes {year}"
         ventes = int((epuis[col_ventes].fillna(0) != 0).sum())
@@ -202,10 +205,13 @@ class SavCalculator:
                 "pct_ventes": pct(ventes), "pct_dispo": pct(dispo)}
 
     # ------------------------------------------------------------------ Valorisation du stock (Achat/Appro)
-    def valorisation_stock(self, year: int, month: int) -> Dict[str, object]:
+    def valorisation_stock_rows(self, year: int, month: int) -> pd.DataFrame:
         df = self.dfs["Stock_Invent"]
-        col_t = next(c for c in df.columns if isinstance(c, str) and c.startswith("T "))
-        sub = df[df["Dépot"].isin(STOCK_DEPOTS) & df["Famille"].isin([valeur for _, valeur in STOCK_FAMILLES])]
+        return df[df["Dépot"].isin(STOCK_DEPOTS) & df["Famille"].isin([valeur for _, valeur in STOCK_FAMILLES])]
+
+    def valorisation_stock(self, year: int, month: int) -> Dict[str, object]:
+        sub = self.valorisation_stock_rows(year, month)
+        col_t = next(c for c in sub.columns if isinstance(c, str) and c.startswith("T "))
         piv = (sub.pivot_table(index="Famille", columns="Dépot", values=col_t, aggfunc="sum")
                   .reindex(index=[valeur for _, valeur in STOCK_FAMILLES], columns=STOCK_DEPOTS)
                   .fillna(0.0))

@@ -72,6 +72,7 @@ DETAIL_COLUMNS: Dict[str, List[str]] = {
     "Devis_Arch": ["N°", "Client"],
     "Devis_EnCours": ["N°", "Client"],
     "MO+Depl": ["Article"],
+    "Ach_Arti": ["Fournisseur", "Désignation", "Référence", "Famille"],
 }
 
 DATE_COLUMNS = ["Date", "Livraison", "Liv. souhaitée", "Réception", "Fact date", "Date Creation Cde"]

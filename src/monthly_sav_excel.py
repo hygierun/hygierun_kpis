@@ -81,10 +81,17 @@ def generate_sav_excel(calc: SavCalculator, result: dict, output_path: str) -> s
     write_summary(ws, f"SAV - {MONTHS_FR[month - 1]} {year}", summary_rows(result))
 
     write_frame(wb, "Devis", select_columns(calc.devis_rows(year, month), ["Date", "N°", "Client", "Salarié", "Total HT"]))
-    write_frame(wb, "Docs_Nuls", select_columns(calc.docs_nuls_rows(year, month),
+    write_frame(wb, "Facture SAV", select_columns(calc.docs_nuls_rows(year, month),
                 ["Catégorie", "Date", "N°", "Client", "Salarié", "Représentant", "PosteEtats", "Type Doc Nul", "Total HT"]))
     write_frame(wb, "Main_oeuvre", select_columns(calc.main_oeuvre_rows(year, month), ["Représentant", "Article réf", "Article", "Catégorie", "Heures"]))
     write_frame(wb, "Deplacement", select_columns(calc.deplacement_rows(year, month), ["Représentant", "Article réf", "Article", "Catégorie", "Heures"]))
+
+    stock_rows = calc.valorisation_stock_rows(year, month)
+    col_t = next(c for c in stock_rows.columns if isinstance(c, str) and c.startswith("T "))
+    write_frame(wb, "Valorisation_Stock", select_columns(stock_rows, ["Dépot", "Désignation", "Référence", "Famille", col_t]))
+
+    write_frame(wb, "Articles_Epuisement", select_columns(calc.articles_epuisement_rows(year, month),
+                ["Fournisseur", "Désignation", "Référence", "Famille", "Réappro", "Dispo", f"Vtes {year}"]))
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     wb.save(output_path)
