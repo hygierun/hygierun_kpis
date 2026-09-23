@@ -1,6 +1,7 @@
 """Chargement et validation des fichiers input du Bilan Mensuel (section par section)."""
 
 import warnings
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -76,6 +77,24 @@ DETAIL_COLUMNS: Dict[str, List[str]] = {
 }
 
 DATE_COLUMNS = ["Date", "Livraison", "Liv. souhaitée", "Réception", "Fact date", "Date Creation Cde"]
+
+
+def _coerce_mixed_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Une cellule datée glissée par erreur dans une colonne normalement numérique (Total HT, Heures,
+    Restant dû...) fait tomber toute la colonne en dtype 'object' avec un mélange float/datetime, ce
+    qui casse .sum() (TypeError: unsupported operand type(s) for +: 'float' and 'datetime.datetime').
+    On détecte précisément ce mélange (jamais légitime : aucune colonne n'est censée contenir à la
+    fois des nombres et des dates) et on force la colonne en numérique - la date invalide devient NaN,
+    comme n'importe quelle autre valeur non numérique déjà tolérée ailleurs."""
+    for col in df.columns:
+        series = df[col]
+        if series.dtype != object:
+            continue
+        has_number = series.map(lambda v: isinstance(v, (int, float)) and not isinstance(v, bool)).any()
+        has_datetime = series.map(lambda v: isinstance(v, datetime)).any()
+        if has_number and has_datetime:
+            df[col] = pd.to_numeric(series, errors="coerce")
+    return df
 
 
 def commerce_required_columns(year: int, month: int) -> Dict[str, List[str]]:
@@ -181,6 +200,6 @@ class MonthlyDataLoader:
                 for col in DATE_COLUMNS:
                     if col in df.columns:
                         df[col] = pd.to_datetime(df[col], errors="coerce")
-                self.dfs[sheet] = df
+                self.dfs[sheet] = _coerce_mixed_numeric_columns(df)
 
         return not self.errors
