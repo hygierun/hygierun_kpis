@@ -509,9 +509,9 @@ def _bilan_total_section(year: int, month: int):
     st.caption("Génère le Bilan Mensuel complet (Commerce, Préparation, Livraison, Compta, SAV, Achat) "
               "à partir d'un seul fichier Input consolidé.")
     st.download_button(
-        f"📄 Télécharger le template Input vierge ({MONTHS_FR[month - 1]} {year})",
+        "📄 Télécharger le template Input vierge",
         data=generate_bilan_template_excel(year, month),
-        file_name=f"Input_Mensuel_Template_{MONTHS_FR[month - 1]}{year}.xlsx",
+        file_name="Input_Mensuel_Template.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True, key=f"{state_key}_dl_template",
         help="19 feuilles avec les colonnes obligatoires déjà en en-tête (adaptées au mois/année "
