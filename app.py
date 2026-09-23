@@ -674,7 +674,7 @@ def run_monthly_report():
     """Onglet Bilan Mensuel : une sous-section par domaine (les autres arrivent une par une)"""
 
     today = datetime.now()
-    default_year, default_month = (today.year - 1, 12) if today.month == 1 else (today.year, today.month - 1)
+    default_year, default_month = today.year, today.month
 
     col_month, col_year = st.columns(2, gap="medium")
     with col_month:
