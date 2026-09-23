@@ -286,7 +286,7 @@ class LivraisonComptaCalculator:
             evolutions["factures_dues_60_nb_m1"] = evolution(cur["factures_dues"]["nb_60"], m1_fd["nb_60"])
             evolutions["factures_dues_60_montant_m1"] = evolution(cur["factures_dues"]["montant_60"], m1_fd["montant_60"])
             evolutions["factures_dues_60_clients_m1"] = evolution(cur["factures_dues"]["clients_60"], m1_fd.get("clients_60"))
-        if m1_gps is not None:
+        if cur["gps"] is not None and m1_gps is not None:
             evolutions["gps_arrets_m1"] = evolution(cur["gps"].loc["Moy pond", "Nb Arrêts Moy"], m1_gps.loc["Moy pond", "Nb Arrêts Moy"])
             evolutions["gps_distance_m1"] = evolution(cur["gps"].loc["Moy pond", "Distance Moy (kms)"], m1_gps.loc["Moy pond", "Distance Moy (kms)"])
 
