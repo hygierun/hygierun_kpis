@@ -14,10 +14,18 @@ def summary_rows(result: dict) -> List[Optional[list]]:
     """Lignes de la feuille Synthèse : [libellé, valeur, N-1, évol N-1, Mois-1, évol Mois-1]."""
     d, e = result["data"], result["evolutions"]
     cur, n1, m1 = d["cur"], d["n1"], d["m1"]
+    m1_interventions = (result.get("mois1_reference") or {}).get("nb_interventions", {})
 
     def line(label: str, block: str, field: str, evo_key: Optional[str] = None) -> list:
         return [label, cur[block][field], n1[block][field], e.get(f"{evo_key}_n1") if evo_key else None,
                 m1[block][field], e.get(f"{evo_key}_m1") if evo_key else None]
+
+    def line_simple(label: str, value) -> list:
+        return [label, value, None, None, None, None]
+
+    def line_interventions(label: str, champ: str) -> list:
+        return [label, cur["nb_interventions"][champ], None, None,
+                m1_interventions.get(champ), e.get(f"nb_interventions_{champ}_m1")]
 
     return [
         ["Devis SAV (Salarié Jimmy DALLEAU + Joël DANVIN)"],
@@ -39,6 +47,29 @@ def summary_rows(result: dict) -> List[Optional[list]]:
         line("Total", "deplacement", "total", "deplacement_total"),
         line("  dont EBC", "deplacement", "ebc", "deplacement_ebc"),
         line("  dont SAV", "deplacement", "sav", "deplacement_sav"),
+        None,
+        ["Nombre d'interventions (feuille Bilan_Fiches, fiches papier)"],
+        line_interventions("Total", "total"),
+        line_interventions("  dont EBC", "ebc"),
+        line_interventions("  dont SAV", "sav"),
+        None,
+        ["Productivité (= heures en intervention / heures travaillées)"],
+        line_simple("  Heures travaillées EBC", cur["productivite"]["heures_travaillees"]["ebc"]),
+        line_simple("  Heures travaillées SAV", cur["productivite"]["heures_travaillees"]["sav"]),
+        line_simple("  Heures intervention EBC", cur["productivite"]["heures_intervention"]["ebc"]),
+        line_simple("  Heures intervention SAV", cur["productivite"]["heures_intervention"]["sav"]),
+        line_simple("  Productivité EBC (%)", cur["productivite"]["pct"]["ebc"]),
+        line_simple("  Productivité SAV (%)", cur["productivite"]["pct"]["sav"]),
+        line_simple("  Productivité totale (%)", cur["productivite"]["pct"]["total"]),
+        None,
+        ["Valorisation du stock (feuille Stock_Invent, Achat/Appro)"],
+        *[line_simple(f"  {row['famille']}", row["total"]) for row in cur["valorisation_stock"]["rows"]],
+        line_simple("  TOTAL", cur["valorisation_stock"]["total"]),
+        None,
+        ["Articles à épuisement (feuille Ach_Arti, Réappro = 'A épuis.', Achat/Appro)"],
+        line_simple("Total", cur["articles_epuisement"]["total"]),
+        line_simple("  dont vendus sur l'année (%)", cur["articles_epuisement"]["pct_ventes"]),
+        line_simple("  dont stockés / dispo compta (%)", cur["articles_epuisement"]["pct_dispo"]),
     ]
 
 

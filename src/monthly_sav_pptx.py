@@ -1,15 +1,19 @@
-"""Remplit le template PowerPoint SAV (diapo 1, 4 blocs) avec les KPI calculés.
+"""Remplit le template PowerPoint SAV/Achat (2 diapos) avec les KPI calculés.
 
-Les blocs pas encore implémentés (Productivité, Nombre d'interventions) sont affichés en "n/a".
-La diapo 2 (Achat/Appro) n'est pas touchée : elle garde ses placeholders "à collecter" du template.
+Diapo 1 (SAV) : Devis, Facturation vs Docs Nuls, Main d'œuvre, Déplacement, Productivité et Nombre
+d'interventions. Diapo 2 (Achat/Appro) : Valorisation du stock et Articles à épuisement — le reste de la
+diapo (Commandes fournisseur, Couverture de stock) n'a pas encore été défini avec Antoine.
 """
 
 from copy import deepcopy
 from pathlib import Path
 
+from pptx.util import Pt
 from pptx import Presentation
 
-from .pptx_helpers import arrow, delta_color, find_shape, fr, fr_k, fr_pct, set_cell, set_delta, set_delta_na, set_subtitle, set_text
+from .monthly_sav import STOCK_FAMILLES
+from .pptx_helpers import (GREY, arrow, delta_color, find_shape, fr, fr_k, fr_pct, set_cell, set_delta,
+                           set_delta_na, set_paragraph, set_subtitle, set_text)
 
 
 def _heures(value: float) -> str:
@@ -23,6 +27,16 @@ def _set_devis_mois1(shape, nb: int, pct):
     runs[1].text = f" -1 : {nb} devis"
     runs[2].text = f"{arrow(pct)} {fr_pct(pct)}"
     runs[2].font.color.rgb = delta_color(pct)
+
+
+def _set_interventions_total_mois1(shape, value, pct):
+    """Cas particulier : 3 runs ('Mois', ' -1 : N', 'flèche %'), comme le Mois-1 des devis (shape 83)."""
+    runs = shape.text_frame.paragraphs[0].runs
+    if value is None:
+        runs[1].text, runs[2].text, runs[2].font.color.rgb = " -1 : n/a", "—", GREY
+    else:
+        runs[1].text = f" -1 : {value}"
+        runs[2].text, runs[2].font.color.rgb = f"{arrow(pct)} {fr_pct(pct)}", delta_color(pct)
 
 
 def _ensure_second_paragraph(shape, template_shape):
@@ -87,18 +101,67 @@ def _fill_deplacement(slide, result: dict):
     set_delta(find_shape(slide, 142), f"N-1 : {n1['sav']:.0f}", e["deplacement_sav_n1"])
 
 
-def _fill_non_implemente(slide):
-    """Productivité et Nombre d'interventions : pas encore calculés."""
-    table = find_shape(slide, 9).table
-    for row in range(1, len(table.rows)):
-        for col in range(1, len(table.columns)):
-            set_cell(table.cell(row, col), "n/a")
+def _pct_abs(value) -> str:
+    return f"{fr(value, 0)}%" if value is not None else "n/a"
 
-    set_text(find_shape(slide, 34), "n/a")
-    for shape_id in (51, 53):
-        set_text(find_shape(slide, shape_id), "n/a")
-    for shape_id in (28, 50, 55):
-        set_delta_na(find_shape(slide, shape_id), "Mois-1")
+
+def _fill_productivite(slide, result: dict):
+    p = result["data"]["cur"]["productivite"]
+    trav, inter, pct = p["heures_travaillees"], p["heures_intervention"], p["pct"]
+    table = find_shape(slide, 9).table
+    for col, equipe in ((1, "ebc"), (2, "sav"), (3, "total")):
+        set_cell(table.cell(1, col), fr(trav[equipe], 0))
+        set_cell(table.cell(2, col), _heures(inter[equipe]))
+        set_cell(table.cell(3, col), _pct_abs(pct[equipe]))
+
+
+def _fill_nb_interventions(slide, result: dict):
+    d, e = result["data"]["cur"]["nb_interventions"], result["evolutions"]
+    m1 = (result.get("mois1_reference") or {}).get("nb_interventions", {})
+
+    set_text(find_shape(slide, 34), f"{d['total']} inter")
+    set_text(find_shape(slide, 51), f"{d['ebc']} EBC")
+    set_text(find_shape(slide, 53), f"{d['sav']} SAV")
+
+    _set_interventions_total_mois1(find_shape(slide, 28), m1.get("total"), e.get("nb_interventions_total_m1"))
+    for shape_id, champ in ((50, "ebc"), (55, "sav")):
+        shape = find_shape(slide, shape_id)
+        if m1.get(champ) is not None:
+            set_delta(shape, f"Mois-1 : {m1[champ]}", e[f"nb_interventions_{champ}_m1"])
+        else:
+            set_delta_na(shape, "Mois-1")
+
+
+def _fill_valorisation_stock(slide, result: dict):
+    v = result["data"]["cur"]["valorisation_stock"]
+    by_famille = {row["famille"]: row for row in v["rows"]}
+    table = find_shape(slide, 27).table
+    for i, (label, _) in enumerate(STOCK_FAMILLES, start=1):
+        row = by_famille[label]
+        set_cell(table.cell(i, 1), fr_k(row["depot"], 1))
+        set_cell(table.cell(i, 2), fr_k(row["showroom"], 1))
+        set_cell(table.cell(i, 3), fr_k(row["total"], 1))
+
+    total_row = len(STOCK_FAMILLES) + 1
+    set_cell(table.cell(total_row, 1), fr_k(v["total_depot"], 1))
+    set_cell(table.cell(total_row, 2), fr_k(v["total_showroom"], 1))
+    set_cell(table.cell(total_row, 3), fr_k(v["total"], 1))
+
+
+def _fill_articles_epuisement(slide, result: dict):
+    """Shape 20 est une zone de fond vide (comme la 9 de la Valorisation du stock, jamais remplie) : la
+    valeur totale est en fait dans la 29 ('213 u'). Les 2 ratios (32, 35) ont déjà un libellé + une valeur
+    de référence à écraser : 2e paragraphe pour 32, dernier run (après un retour à la ligne) pour 35."""
+    a = result["data"]["cur"]["articles_epuisement"]
+
+    set_text(find_shape(slide, 29), f"{a['total']} u")
+    set_paragraph(find_shape(slide, 32).text_frame.paragraphs[1], _pct_abs(a["pct_ventes"]))
+    find_shape(slide, 35).text_frame.paragraphs[0].runs[-1].text = _pct_abs(a["pct_dispo"])
+
+    mois1_shape = find_shape(slide, 22)
+    set_cell(mois1_shape, "n/a")
+    mois1_run = mois1_shape.text_frame.paragraphs[0].runs[0]
+    mois1_run.font.size, mois1_run.font.color.rgb = Pt(12), GREY
 
 
 def generate_sav_pptx(result: dict, template_path: str, output_path: str) -> str:
@@ -109,7 +172,15 @@ def generate_sav_pptx(result: dict, template_path: str, output_path: str) -> str
     _fill_docs_nuls(slide1, result)
     _fill_main_oeuvre(slide1, result)
     _fill_deplacement(slide1, result)
-    _fill_non_implemente(slide1)
+    _fill_productivite(slide1, result)
+    _fill_nb_interventions(slide1, result)
+
+    # Le sous-titre de la diapo Achat/Appro (shape 5) n'a qu'un seul run (pas le schéma standard à 3
+    # runs de set_subtitle) : le reste de cette diapo n'étant pas encore défini avec Antoine, on laisse
+    # son texte tel quel.
+    slide2 = prs.slides[1]
+    _fill_valorisation_stock(slide2, result)
+    _fill_articles_epuisement(slide2, result)
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     prs.save(output_path)

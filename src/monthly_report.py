@@ -19,6 +19,7 @@ from .monthly_preparation_excel import generate_preparation_excel
 from .monthly_preparation_pptx import generate_preparation_pptx
 from .monthly_sav import SavCalculator
 from .monthly_sav_excel import generate_sav_excel
+from .monthly_sav_mois1 import read_sav_mois1_reference
 from .monthly_sav_pptx import generate_sav_pptx
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
@@ -69,9 +70,14 @@ def build_livraison_report(input_path: str, year: int, month: int, template_path
                          compute_kwargs={"mois1_reference": mois1_reference}, jours_recalage=jours_recalage)
 
 
-def build_sav_report(input_path: str, year: int, month: int, template_path: Path = SAV_TEMPLATE) -> Dict:
+def build_sav_report(input_path: str, year: int, month: int, template_path: Path = SAV_TEMPLATE,
+                     mois1_pptx_path: Optional[str] = None) -> Dict:
+    """mois1_pptx_path : deck SAV du mois précédent (généré par cette app), pour l'évolution Mois-1 du
+    Nombre d'interventions — pas recalculable depuis l'historique. Sans lui, cette évolution reste 'n/a'."""
+    mois1_reference = read_sav_mois1_reference(mois1_pptx_path) if mois1_pptx_path else None
     return _build_report("load_sav_achat", SavCalculator, monthly_sav_excel, generate_sav_excel,
-                         generate_sav_pptx, template_path, input_path, year, month)
+                         generate_sav_pptx, template_path, input_path, year, month,
+                         compute_kwargs={"mois1_reference": mois1_reference})
 
 
 MONTHLY_SECTIONS = {
@@ -95,8 +101,12 @@ MONTHLY_SECTIONS = {
     },
     "sav": {
         "label": "🔧 SAV", "name": "SAV",
-        "input_help": "Input_SAV_Achat.xlsx : feuilles Fact_Arch, Devis_Arch, Devis_EnCours, MO+Depl "
-                      "(Stock_Invent présente mais pas encore utilisée)",
+        "input_help": "Input_SAV_Achat.xlsx : feuilles Fact_Arch, Devis_Arch, Devis_EnCours, MO+Depl, "
+                      "Absences_Tech, Bilan_Fiches (nb interventions + heures, lu à la main sur les fiches "
+                      "papier via docs/prompt_analyse_fiches_sav.md), Stock_Invent",
         "required": sav_achat_required_columns, "build": build_sav_report,
+        "mois1_pptx_help": "PowerPoint SAV du mois précédent (généré par cette app) : sert à calculer "
+                           "l'évolution Mois-1 du Nombre d'interventions, qu'on ne peut pas recalculer "
+                           "depuis l'historique. Optionnel — sans lui, cette évolution reste 'n/a'.",
     },
 }

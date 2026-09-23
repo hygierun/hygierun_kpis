@@ -50,7 +50,14 @@ SAV_ACHAT_REQUIRED_COLUMNS: Dict[str, List[str]] = {
     "Devis_Arch": ["Date", "Salarié", "Total HT"],
     "Devis_EnCours": ["Date", "Salarié", "Total HT"],
     "MO+Depl": ["Article réf", "Représentant"],
+    "Bilan_Fiches": ["Equipe", "Nb interventions", "Nb heures en intervention"],
+    "Absences_Tech": ["Noms", "Nb jours Absences"],
+    "Stock_Invent": ["Dépot", "Famille"],
+    "Ach_Arti": ["Réappro", "Dispo"],
 }
+
+# Feuilles chargées sans restriction de colonnes (colonne dynamique du jour, ex. "T 04/09/26").
+FULL_SHEETS = {"Stock_Invent"}
 
 DETAIL_COLUMNS: Dict[str, List[str]] = {
     "Cdes_ALivr": ["N°", "Client", "Total HT"],
@@ -90,12 +97,14 @@ def preparation_required_columns(year: int, month: int) -> Dict[str, List[str]]:
 
 
 def sav_achat_required_columns(year: int, month: int) -> Dict[str, List[str]]:
-    """MO+Depl a besoin des colonnes Qté du mois, de N-1 et de Mois-1 (feuille = tout l'historique en colonnes)."""
+    """MO+Depl a besoin des colonnes Qté du mois, de N-1 et de Mois-1 (feuille = tout l'historique en colonnes).
+    Ach_Arti a besoin de la colonne Ventes de l'année en cours (ex. 'Vtes 2026')."""
     required = {sheet: list(cols) for sheet, cols in SAV_ACHAT_REQUIRED_COLUMNS.items()}
     py, pm = previous_month(year, month)
     required["MO+Depl"] += [
         month_column(year, month, "Qté"), month_column(py, pm, "Qté"), month_column(year - 1, month, "Qté"),
     ]
+    required["Ach_Arti"] += [f"Vtes {year}"]
     return required
 
 
@@ -134,8 +143,11 @@ class MonthlyDataLoader:
                 return False
 
             for sheet, cols in required.items():
-                wanted = set(cols) | set(DETAIL_COLUMNS.get(sheet, []))
-                df = xl.parse(sheet, usecols=lambda c, w=wanted: c in w)
+                if sheet in FULL_SHEETS:
+                    df = xl.parse(sheet)
+                else:
+                    wanted = set(cols) | set(DETAIL_COLUMNS.get(sheet, []))
+                    df = xl.parse(sheet, usecols=lambda c, w=wanted: c in w)
                 missing_cols = [c for c in cols if c not in df.columns]
                 if missing_cols:
                     self.errors.append(f"Feuille '{sheet}' : colonnes manquantes : {', '.join(missing_cols)}")
