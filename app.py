@@ -8,6 +8,7 @@ import streamlit as st
 import pandas as pd
 import tempfile
 import os
+import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -468,6 +469,8 @@ def run_weekly_report():
             except Exception as e:
                 st.error(f"❌ Erreur: {str(e)}")
                 st.write("Vérifiez que les fichiers sont au bon format")
+                with st.expander("Détail technique (à copier si le problème persiste)"):
+                    st.code(traceback.format_exc())
 
     st.divider()
     st.caption("💡 Astuce: Vous pouvez télécharger les fichiers d'exemple pour tester l'application")
@@ -568,6 +571,8 @@ def _bilan_total_section(year: int, month: int):
             except Exception as e:
                 st.session_state.pop(state_key, None)
                 st.error(f"❌ Erreur: {e}")
+                with st.expander("Détail technique (à copier si le problème persiste)"):
+                    st.code(traceback.format_exc())
 
     report = st.session_state.get(state_key)
     if report:
@@ -637,6 +642,8 @@ def _monthly_section(key: str, section: dict, year: int, month: int):
             except Exception as e:
                 st.session_state.pop(state_key, None)
                 st.error(f"❌ Erreur: {e}")
+                with st.expander("Détail technique (à copier si le problème persiste)"):
+                    st.code(traceback.format_exc())
 
     report = st.session_state.get(state_key)
     if report:
