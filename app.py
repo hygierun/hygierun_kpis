@@ -13,8 +13,9 @@ from pathlib import Path
 
 from src import WeeklyDataLoader, KPICalculator
 from src.excel_helpers import SUMMARY_HEADERS
-from src.monthly_loader import MONTHS_FR
+from src.monthly_loader import MONTHS_FR, bilan_total_required_columns
 from src.monthly_report import MONTHLY_SECTIONS
+from src.monthly_bilan import build_bilan_report
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
@@ -499,6 +500,50 @@ def _summary_dataframe(rows):
     return pd.DataFrame(records)
 
 
+def _bilan_total_section(year: int, month: int):
+    """Onglet 'Bilan total' : 1 seul fichier Input (19 feuilles fusionnées) -> 1 seul PowerPoint (11
+    diapos). Première étape de validation : pas encore de Mois-1 ni d'Excel de sortie regroupés."""
+    state_key = "bilan_total"
+    st.caption("Génère le Bilan Mensuel complet (Commerce, Préparation, Livraison, Compta, SAV, Achat) "
+              "à partir d'un seul fichier Input consolidé.")
+    uploaded = st.file_uploader("Input Mensuel (toutes sections)", type="xlsx", key=f"{state_key}_input",
+                                help="19 feuilles : les feuilles partagées entre sections (Cdes_Arch, "
+                                     "Fact_Arch, Livr_Arch) ne doivent apparaître qu'une seule fois, "
+                                     "avec toutes les colonnes nécessaires à chaque section.")
+
+    with st.expander("📋 Colonnes obligatoires dans le fichier input", expanded=False):
+        st.caption("Ces colonnes doivent exister (avec ces noms exacts) pour que les calculs fonctionnent.")
+        for sheet, cols in bilan_total_required_columns(year, month).items():
+            st.markdown(f"**{sheet}** : " + ", ".join(f"`{c}`" for c in cols))
+
+    if st.button("🚀 Générer le Bilan Total", use_container_width=True, type="primary", key=f"{state_key}_generate"):
+        if not uploaded:
+            st.error("❌ Veuillez charger le fichier Input Mensuel consolidé", icon="📋")
+        else:
+            try:
+                with st.spinner("⏳ Traitement en cours..."):
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        input_path = Path(tmpdir) / "input_bilan.xlsx"
+                        input_path.write_bytes(uploaded.getbuffer())
+                        st.session_state[state_key] = build_bilan_report(str(input_path), year, month)
+            except Exception as e:
+                st.session_state.pop(state_key, None)
+                st.error(f"❌ Erreur: {e}")
+
+    report = st.session_state.get(state_key)
+    if report:
+        st.success("✅ Bilan Mensuel généré (11 diapos)")
+        st.download_button(
+            "📥 Télécharger le PowerPoint Bilan Mensuel", data=report["pptx"],
+            file_name=f"Bilan_Mensuel_{MONTHS_FR[month - 1]}{year}.pptx",
+            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            use_container_width=True,
+        )
+        for key, summary in report["summaries"].items():
+            with st.expander(f"Résumé — {key.capitalize()}", expanded=False):
+                st.dataframe(_summary_dataframe(summary), use_container_width=True, hide_index=True)
+
+
 def _monthly_section(key: str, section: dict, year: int, month: int):
     """Une section du Bilan Mensuel : upload de son input, génération, aperçu et téléchargements."""
     state_key = f"monthly_{key}"
@@ -572,8 +617,11 @@ def run_monthly_report():
     with col_year:
         year = int(st.number_input("Année", min_value=2020, max_value=2100, value=default_year, step=1, key="monthly_year"))
 
-    section_tabs = st.tabs([section["label"] for section in MONTHLY_SECTIONS.values()])
-    for tab, (key, section) in zip(section_tabs, MONTHLY_SECTIONS.items()):
+    labels = ["🗂️ Bilan total"] + [section["label"] for section in MONTHLY_SECTIONS.values()]
+    all_tabs = st.tabs(labels)
+    with all_tabs[0]:
+        _bilan_total_section(year, month)
+    for tab, (key, section) in zip(all_tabs[1:], MONTHLY_SECTIONS.items()):
         with tab:
             _monthly_section(key, section, year, month)
 

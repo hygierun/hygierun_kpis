@@ -109,6 +109,28 @@ def sav_achat_required_columns(year: int, month: int) -> Dict[str, List[str]]:
     return required
 
 
+def bilan_total_required_columns(year: int, month: int) -> Dict[str, List[str]]:
+    """Union des feuilles/colonnes des 4 sections pour le fichier Input Mensuel consolidé.
+
+    3 feuilles sont partagées entre sections (Cdes_Arch, Fact_Arch, Livr_Arch) : on garde à chaque fois
+    l'union des colonnes demandées par chaque section qui s'en sert, jamais un sous-ensemble - dérivé
+    directement des fonctions *_required_columns existantes, pas dupliqué à la main, pour ne jamais
+    diverger si une section change ses colonnes requises."""
+    merged: Dict[str, List[str]] = {}
+    for required in (
+        commerce_required_columns(year, month),
+        preparation_required_columns(year, month),
+        livraison_compta_required_columns(year, month),
+        sav_achat_required_columns(year, month),
+    ):
+        for sheet, cols in required.items():
+            existing = merged.setdefault(sheet, [])
+            for col in cols:
+                if col not in existing:
+                    existing.append(col)
+    return merged
+
+
 class MonthlyDataLoader:
     """Charge les feuilles d'un Input mensuel et vérifie la présence des colonnes requises."""
 
@@ -128,6 +150,9 @@ class MonthlyDataLoader:
 
     def load_sav_achat(self, year: int, month: int) -> bool:
         return self._load(sav_achat_required_columns(year, month))
+
+    def load_bilan_total(self, year: int, month: int) -> bool:
+        return self._load(bilan_total_required_columns(year, month))
 
     def _load(self, required: Dict[str, List[str]]) -> bool:
         self.errors = []
