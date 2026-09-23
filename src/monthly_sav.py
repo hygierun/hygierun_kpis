@@ -255,10 +255,17 @@ class SavCalculator:
                 for champ in ("total", "ebc", "sav"):
                     evolutions[f"{bloc}_{champ}_{ref}"] = evolution(cur[bloc][champ], other[bloc][champ])
 
-        # Nombre d'interventions : pas d'historique recalculable, Mois-1 lu depuis un PPTX si fourni.
+        # Nombre d'interventions, Valorisation du stock, Articles à épuisement : pas d'historique
+        # recalculable, Mois-1 lu depuis un PPTX si fourni.
         m1_interventions = (mois1_reference or {}).get("nb_interventions", {})
         for champ in ("total", "ebc", "sav"):
             evolutions[f"nb_interventions_{champ}_m1"] = evolution(cur["nb_interventions"][champ], m1_interventions.get(champ))
+
+        m1_valorisation = (mois1_reference or {}).get("valorisation_stock", {})
+        evolutions["valorisation_stock_total_m1"] = evolution(cur["valorisation_stock"]["total"], m1_valorisation.get("total"))
+
+        m1_articles = (mois1_reference or {}).get("articles_epuisement", {})
+        evolutions["articles_epuisement_total_m1"] = evolution(cur["articles_epuisement"]["total"], m1_articles.get("total"))
 
         return {"year": year, "month": month, "periods": periods, "data": data, "evolutions": evolutions,
                 "mois1_reference": mois1_reference}

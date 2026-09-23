@@ -132,8 +132,20 @@ def _fill_nb_interventions(slide, result: dict):
             set_delta_na(shape, "Mois-1")
 
 
+def _set_simple_delta(shape, pct):
+    """Boîte 'vs Mois-1' vide (aucun run à hériter, contrairement aux N-1/Mois-1 à 2 lignes des autres
+    blocs) : juste la flèche + le %, ou 'n/a' si pas de référence Mois-1 fournie."""
+    paragraph = shape.text_frame.paragraphs[0]
+    run = paragraph.runs[0] if paragraph.runs else paragraph.add_run()
+    run.font.size = Pt(12)
+    if pct is None:
+        run.text, run.font.color.rgb = "n/a", GREY
+    else:
+        run.text, run.font.color.rgb = f"{arrow(pct)} {fr_pct(pct)}", delta_color(pct)
+
+
 def _fill_valorisation_stock(slide, result: dict):
-    v = result["data"]["cur"]["valorisation_stock"]
+    v, e = result["data"]["cur"]["valorisation_stock"], result["evolutions"]
     by_famille = {row["famille"]: row for row in v["rows"]}
     table = find_shape(slide, 27).table
     for i, (label, _) in enumerate(STOCK_FAMILLES, start=1):
@@ -147,21 +159,20 @@ def _fill_valorisation_stock(slide, result: dict):
     set_cell(table.cell(total_row, 2), fr_k(v["total_showroom"], 1))
     set_cell(table.cell(total_row, 3), fr_k(v["total"], 1))
 
+    _set_simple_delta(find_shape(slide, 10), e.get("valorisation_stock_total_m1"))
+
 
 def _fill_articles_epuisement(slide, result: dict):
     """Shape 20 est une zone de fond vide (comme la 9 de la Valorisation du stock, jamais remplie) : la
     valeur totale est en fait dans la 29 ('213 u'). Les 2 ratios (32, 35) ont déjà un libellé + une valeur
     de référence à écraser : 2e paragraphe pour 32, dernier run (après un retour à la ligne) pour 35."""
-    a = result["data"]["cur"]["articles_epuisement"]
+    a, e = result["data"]["cur"]["articles_epuisement"], result["evolutions"]
 
     set_text(find_shape(slide, 29), f"{a['total']} u")
     set_paragraph(find_shape(slide, 32).text_frame.paragraphs[1], _pct_abs(a["pct_ventes"]))
     find_shape(slide, 35).text_frame.paragraphs[0].runs[-1].text = _pct_abs(a["pct_dispo"])
 
-    mois1_shape = find_shape(slide, 22)
-    set_cell(mois1_shape, "n/a")
-    mois1_run = mois1_shape.text_frame.paragraphs[0].runs[0]
-    mois1_run.font.size, mois1_run.font.color.rgb = Pt(12), GREY
+    _set_simple_delta(find_shape(slide, 22), e.get("articles_epuisement_total_m1"))
 
 
 def generate_sav_pptx(result: dict, template_path: str, output_path: str) -> str:
