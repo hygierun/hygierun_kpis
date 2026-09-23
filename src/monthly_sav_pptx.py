@@ -12,8 +12,10 @@ from pptx.util import Pt
 from pptx import Presentation
 
 from .monthly_sav import STOCK_FAMILLES
-from .pptx_helpers import (GREY, arrow, delta_color, find_shape, fr, fr_k, fr_pct, set_cell, set_delta,
-                           set_delta_na, set_paragraph, set_subtitle, set_text)
+from .pptx_helpers import (GREEN, GREY, RED, arrow, delta_color, find_shape, fr, fr_k, fr_pct, set_cell,
+                           set_delta, set_delta_na, set_paragraph, set_subtitle, set_text)
+
+PRODUCTIVITE_SEUIL = 50  # % : vert au-dessus, rouge en dessous (règle validée avec Antoine)
 
 
 def _heures(value: float) -> str:
@@ -37,6 +39,18 @@ def _set_interventions_total_mois1(shape, value, pct):
     else:
         runs[1].text = f" -1 : {value}"
         runs[2].text, runs[2].font.color.rgb = f"{arrow(pct)} {fr_pct(pct)}", delta_color(pct)
+
+
+def _set_productivite_total_mois1(shape, value, pct):
+    """Cas particulier : 2 runs seulement ('Mois', ' -1 :'), il manque le 3e run (flèche %) à créer."""
+    paragraph = shape.text_frame.paragraphs[0]
+    runs = paragraph.runs
+    delta_run = runs[2] if len(runs) > 2 else paragraph.add_run()
+    if value is None:
+        runs[1].text, delta_run.text, delta_run.font.color.rgb = " -1 : n/a", "—", GREY
+    else:
+        runs[1].text = f" -1 : {_pct_abs(value)}"
+        delta_run.text, delta_run.font.color.rgb = f"{arrow(pct)} {fr_pct(pct)}", delta_color(pct)
 
 
 def _ensure_second_paragraph(shape, template_shape):
@@ -85,8 +99,8 @@ def _fill_main_oeuvre(slide, result: dict):
     set_text(find_shape(slide, 78), f"{_heures(cur['ebc'])} EBC")
     set_text(find_shape(slide, 79), f"{_heures(cur['sav'])} SAV")
     set_delta(find_shape(slide, 82), f"N-1 : {_heures(n1['total'])}", e["main_oeuvre_total_n1"])
-    set_delta(find_shape(slide, 77), f"N-1 : {_heures(n1['ebc'])}", e["main_oeuvre_ebc_n1"])
-    set_delta(find_shape(slide, 80), f"N-1 : {_heures(n1['sav'])}", e["main_oeuvre_sav_n1"])
+    set_delta(find_shape(slide, 80), f"N-1 : {_heures(n1['ebc'])}", e["main_oeuvre_ebc_n1"])
+    set_delta(find_shape(slide, 77), f"N-1 : {_heures(n1['sav'])}", e["main_oeuvre_sav_n1"])
 
 
 def _fill_deplacement(slide, result: dict):
@@ -97,8 +111,8 @@ def _fill_deplacement(slide, result: dict):
     set_text(find_shape(slide, 138), f"{cur['ebc']:.0f} EBC")
     set_text(find_shape(slide, 140), f"{cur['sav']:.0f} SAV")
     set_delta(find_shape(slide, 146), f"N-1 : {n1['total']:.0f}", e["deplacement_total_n1"])
-    set_delta(find_shape(slide, 134), f"N-1 : {n1['ebc']:.0f}", e["deplacement_ebc_n1"])
-    set_delta(find_shape(slide, 142), f"N-1 : {n1['sav']:.0f}", e["deplacement_sav_n1"])
+    set_delta(find_shape(slide, 142), f"N-1 : {n1['ebc']:.0f}", e["deplacement_ebc_n1"])
+    set_delta(find_shape(slide, 134), f"N-1 : {n1['sav']:.0f}", e["deplacement_sav_n1"])
 
 
 def _pct_abs(value) -> str:
@@ -106,13 +120,30 @@ def _pct_abs(value) -> str:
 
 
 def _fill_productivite(slide, result: dict):
-    p = result["data"]["cur"]["productivite"]
+    p, e = result["data"]["cur"]["productivite"], result["evolutions"]
     trav, inter, pct = p["heures_travaillees"], p["heures_intervention"], p["pct"]
     table = find_shape(slide, 9).table
     for col, equipe in ((1, "ebc"), (2, "sav"), (3, "total")):
         set_cell(table.cell(1, col), fr(trav[equipe], 0))
         set_cell(table.cell(2, col), _heures(inter[equipe]))
-        set_cell(table.cell(3, col), _pct_abs(pct[equipe]))
+        pct_cell = table.cell(3, col)
+        set_cell(pct_cell, _pct_abs(pct[equipe]))
+        if pct[equipe] is not None:
+            pct_cell.text_frame.paragraphs[0].runs[0].font.color.rgb = GREEN if pct[equipe] >= PRODUCTIVITE_SEUIL else RED
+
+    set_text(find_shape(slide, 42), _pct_abs(pct["total"]))
+    set_text(find_shape(slide, 52), f"{_pct_abs(pct['ebc'])} EBC")
+    set_text(find_shape(slide, 56), f"{_pct_abs(pct['sav'])} SAV")
+
+    m1 = (result.get("mois1_reference") or {}).get("productivite", {})
+    _set_productivite_total_mois1(find_shape(slide, 41), m1.get("total"), e.get("productivite_total_m1"))
+    for shape_id, champ, donor_id in ((58, "ebc", 55), (47, "sav", 50)):
+        shape = find_shape(slide, shape_id)
+        _ensure_second_paragraph(shape, find_shape(slide, donor_id))
+        if m1.get(champ) is not None:
+            set_delta(shape, f"Mois-1 : {_pct_abs(m1[champ])}", e.get(f"productivite_{champ}_m1"))
+        else:
+            set_delta_na(shape, "Mois-1")
 
 
 def _fill_nb_interventions(slide, result: dict):
@@ -124,7 +155,7 @@ def _fill_nb_interventions(slide, result: dict):
     set_text(find_shape(slide, 53), f"{d['sav']} SAV")
 
     _set_interventions_total_mois1(find_shape(slide, 28), m1.get("total"), e.get("nb_interventions_total_m1"))
-    for shape_id, champ in ((50, "ebc"), (55, "sav")):
+    for shape_id, champ in ((55, "ebc"), (50, "sav")):
         shape = find_shape(slide, shape_id)
         if m1.get(champ) is not None:
             set_delta(shape, f"Mois-1 : {m1[champ]}", e[f"nb_interventions_{champ}_m1"])
@@ -172,7 +203,7 @@ def _fill_articles_epuisement(slide, result: dict):
     set_paragraph(find_shape(slide, 32).text_frame.paragraphs[1], _pct_abs(a["pct_ventes"]))
     find_shape(slide, 35).text_frame.paragraphs[0].runs[-1].text = _pct_abs(a["pct_dispo"])
 
-    _set_simple_delta(find_shape(slide, 22), e.get("articles_epuisement_total_m1"))
+    _set_simple_delta(find_shape(slide, 15), e.get("articles_epuisement_total_m1"))
 
 
 def generate_sav_pptx(result: dict, template_path: str, output_path: str) -> str:

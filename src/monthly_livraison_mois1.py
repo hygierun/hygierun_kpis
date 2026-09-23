@@ -66,11 +66,13 @@ def read_mois1_reference(pptx_path: str) -> dict:
     montant = _montant_k(_text(slide3, 74))
     nb_60 = _nombre(_text(slide3, 39))
     montant_60 = _montant_k(_text(slide3, 28))
+    clients_60 = _nombre(_text(slide3, 35))
     if nb is not None and montant is not None:
         reference["factures_dues"] = {
             "nb": int(nb), "montant": montant,
             "nb_60": int(nb_60) if nb_60 is not None else None,
             "montant_60": montant_60,
+            "clients_60": int(clients_60) if clients_60 is not None else None,
         }
 
     try:

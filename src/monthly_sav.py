@@ -261,6 +261,10 @@ class SavCalculator:
         for champ in ("total", "ebc", "sav"):
             evolutions[f"nb_interventions_{champ}_m1"] = evolution(cur["nb_interventions"][champ], m1_interventions.get(champ))
 
+        m1_productivite = (mois1_reference or {}).get("productivite", {})
+        for champ in ("total", "ebc", "sav"):
+            evolutions[f"productivite_{champ}_m1"] = evolution(cur["productivite"]["pct"][champ], m1_productivite.get(champ))
+
         m1_valorisation = (mois1_reference or {}).get("valorisation_stock", {})
         evolutions["valorisation_stock_total_m1"] = evolution(cur["valorisation_stock"]["total"], m1_valorisation.get("total"))
 

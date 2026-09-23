@@ -137,7 +137,10 @@ def _fill_slide3(slide, result: dict):
     if m1_fd:
         set_delta(find_shape(slide, 65), f"Mois-1 : {m1_fd['nb_60']} fact", e.get("factures_dues_60_nb_m1"), higher_is_bad=True)
         set_delta(find_shape(slide, 68), f"Mois-1 : {fr_k(m1_fd['montant_60'], 1)}", e.get("factures_dues_60_montant_m1"), higher_is_bad=True)
-        set_delta_na(find_shape(slide, 61), "Mois-1")  # pas de clients distincts Mois-1 dans la référence manuelle
+        if m1_fd.get("clients_60") is not None:
+            set_delta(find_shape(slide, 61), f"Mois-1 : {m1_fd['clients_60']} clients", e.get("factures_dues_60_clients_m1"), higher_is_bad=True)
+        else:
+            set_delta_na(find_shape(slide, 61), "Mois-1")
     else:
         for shape_id in (65, 68, 61):
             set_delta_na(find_shape(slide, shape_id), "Mois-1")
